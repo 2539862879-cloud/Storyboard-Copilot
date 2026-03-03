@@ -38,6 +38,8 @@ const VIEWPORT_UPSERT_DEBOUNCE_MS = 280;
 const VIEWPORT_EPSILON = 0.001;
 const IDLE_PERSIST_TIMEOUT_MS = 1200;
 const FALLBACK_IDLE_DELAY_MS = 64;
+const MAX_PERSISTED_HISTORY_STEPS = 12;
+const MAX_HISTORY_RESTORE_JSON_CHARS = 1_500_000;
 const DELETE_RETRY_DELAY_MS = 80;
 const MAX_DELETE_RETRIES = 10;
 
@@ -163,6 +165,13 @@ function mapHistoryImageReferences(
   };
 }
 
+function trimHistoryForPersistence(history: CanvasHistoryState): CanvasHistoryState {
+  return {
+    past: history.past.slice(-MAX_PERSISTED_HISTORY_STEPS),
+    future: history.future.slice(-MAX_PERSISTED_HISTORY_STEPS),
+  };
+}
+
 function encodeProject(project: Project): PersistedProject {
   const imagePool: string[] = [];
   const imageIndexMap = new Map<string, number>();
@@ -196,6 +205,69 @@ function safeParseJson<T>(value: string, fallback: T): T {
   }
 }
 
+function extractImagePoolFromHistoryJson(historyJson: string): string[] {
+  const imagePoolKey = '"imagePool"';
+  const keyIndex = historyJson.indexOf(imagePoolKey);
+  if (keyIndex < 0) {
+    return [];
+  }
+
+  const arrayStart = historyJson.indexOf('[', keyIndex + imagePoolKey.length);
+  if (arrayStart < 0) {
+    return [];
+  }
+
+  let depth = 0;
+  let inString = false;
+  let escaped = false;
+  let arrayEnd = -1;
+
+  for (let index = arrayStart; index < historyJson.length; index += 1) {
+    const char = historyJson[index];
+
+    if (inString) {
+      if (escaped) {
+        escaped = false;
+      } else if (char === '\\') {
+        escaped = true;
+      } else if (char === '"') {
+        inString = false;
+      }
+      continue;
+    }
+
+    if (char === '"') {
+      inString = true;
+      continue;
+    }
+
+    if (char === '[') {
+      depth += 1;
+      continue;
+    }
+
+    if (char === ']') {
+      depth -= 1;
+      if (depth === 0) {
+        arrayEnd = index;
+        break;
+      }
+    }
+  }
+
+  if (arrayEnd < 0) {
+    return [];
+  }
+
+  const rawArrayJson = historyJson.slice(arrayStart, arrayEnd + 1);
+  const parsed = safeParseJson<unknown>(rawArrayJson, []);
+  if (!Array.isArray(parsed)) {
+    return [];
+  }
+
+  return parsed.filter((item): item is string => typeof item === 'string');
+}
+
 function toProjectSummary(record: ProjectSummaryRecord): ProjectSummary {
   return {
     id: record.id,
@@ -209,7 +281,7 @@ function toProjectSummary(record: ProjectSummaryRecord): ProjectSummary {
 function toProjectRecord(project: Project): ProjectRecord {
   const encodedProject = encodeProject(project);
   const persistedNodes = encodedProject.nodes;
-  const persistedHistory = encodedProject.history;
+  const persistedHistory = trimHistoryForPersistence(encodedProject.history);
 
   return {
     id: encodedProject.id,
@@ -231,11 +303,26 @@ function fromProjectRecord(record: ProjectRecord): Project {
   const parsedNodes = safeParseJson<CanvasNode[]>(record.nodesJson, []);
   const parsedEdges = safeParseJson<CanvasEdge[]>(record.edgesJson, []);
   const parsedViewport = safeParseJson<Viewport>(record.viewportJson, DEFAULT_VIEWPORT);
-  const parsedHistoryPayload = safeParseJson<{
-    past?: CanvasHistoryState['past'];
-    future?: CanvasHistoryState['future'];
-    imagePool?: string[];
-  }>(record.historyJson, {});
+  const shouldRestoreHistory = record.historyJson.length <= MAX_HISTORY_RESTORE_JSON_CHARS;
+  const extractedImagePool = extractImagePoolFromHistoryJson(record.historyJson);
+  const parsedHistoryPayload = shouldRestoreHistory
+    ? safeParseJson<{
+        past?: CanvasHistoryState['past'];
+        future?: CanvasHistoryState['future'];
+        imagePool?: string[];
+      }>(record.historyJson, {})
+    : {};
+
+  if (!shouldRestoreHistory) {
+    console.warn(
+      `Skip restoring oversized history payload (${record.historyJson.length} chars) for project ${record.id}`
+    );
+  }
+
+  const parsedHistory = {
+    past: parsedHistoryPayload.past ?? [],
+    future: parsedHistoryPayload.future ?? [],
+  };
 
   const persistedProject: PersistedProject = {
     id: record.id,
@@ -246,11 +333,8 @@ function fromProjectRecord(record: ProjectRecord): Project {
     nodes: parsedNodes,
     edges: parsedEdges,
     viewport: parsedViewport ?? DEFAULT_VIEWPORT,
-    history: {
-      past: parsedHistoryPayload.past ?? [],
-      future: parsedHistoryPayload.future ?? [],
-    },
-    imagePool: parsedHistoryPayload.imagePool ?? [],
+    history: parsedHistory,
+    imagePool: parsedHistoryPayload.imagePool ?? extractedImagePool,
   };
 
   const decodedProject = decodeProject(persistedProject);

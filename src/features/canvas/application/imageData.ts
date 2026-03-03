@@ -1,3 +1,7 @@
+import { convertFileSrc, isTauri } from '@tauri-apps/api/core';
+
+import { loadImage, persistImageSource } from '@/commands/image';
+
 export function parseAspectRatio(value: string): number {
   const [width, height] = value.split(':').map((item) => Number(item));
   if (!Number.isFinite(width) || !Number.isFinite(height) || width <= 0 || height <= 0) {
@@ -29,7 +33,8 @@ function greatestCommonDivisor(a: number, b: number): number {
   return x || 1;
 }
 
-const DEFAULT_PREVIEW_MAX_DIMENSION = 1024;
+const DEFAULT_PREVIEW_MAX_DIMENSION = 512;
+const LOCAL_PATH_PREFIX_PATTERN = /^(?:[A-Za-z]:[\\/]|\\\\|\/)/;
 
 export interface PreparedNodeImage {
   imageUrl: string;
@@ -37,19 +42,102 @@ export interface PreparedNodeImage {
   aspectRatio: string;
 }
 
+const ORIGINAL_IMAGE_ZOOM_THRESHOLD = 1.45;
+
+export function shouldUseOriginalImageByZoom(zoom: number): boolean {
+  return Number.isFinite(zoom) && zoom >= ORIGINAL_IMAGE_ZOOM_THRESHOLD;
+}
+
+export function isLikelyLocalImagePath(imageUrl: string): boolean {
+  if (!imageUrl) {
+    return false;
+  }
+
+  const lower = imageUrl.toLowerCase();
+  if (
+    lower.startsWith('data:') ||
+    lower.startsWith('http://') ||
+    lower.startsWith('https://') ||
+    lower.startsWith('blob:') ||
+    lower.startsWith('asset:') ||
+    lower.startsWith('tauri:') ||
+    lower.startsWith('file://')
+  ) {
+    return false;
+  }
+
+  return LOCAL_PATH_PREFIX_PATTERN.test(imageUrl);
+}
+
+export function resolveImageDisplayUrl(imageUrl: string): string {
+  const lower = imageUrl.toLowerCase();
+  if (lower.startsWith('file://')) {
+    if (!isTauri()) {
+      return imageUrl;
+    }
+
+    try {
+      const parsed = new URL(imageUrl);
+      const decodedPathname = decodeURIComponent(parsed.pathname);
+      const normalizedPath = decodedPathname.replace(/^\/([A-Za-z]:[\\/])/, '$1');
+      if (!normalizedPath) {
+        return imageUrl;
+      }
+      return convertFileSrc(normalizedPath);
+    } catch {
+      return imageUrl;
+    }
+  }
+
+  if (!isLikelyLocalImagePath(imageUrl)) {
+    return imageUrl;
+  }
+
+  if (!isTauri()) {
+    return imageUrl;
+  }
+
+  return convertFileSrc(imageUrl);
+}
+
+export async function persistImageLocally(source: string): Promise<string> {
+  if (isLikelyLocalImagePath(source)) {
+    return source;
+  }
+
+  if (!isTauri()) {
+    return source;
+  }
+
+  return await persistImageSource(source);
+}
+
 export async function loadImageElement(source: string): Promise<HTMLImageElement> {
   const image = new Image();
+  const displaySource = resolveImageDisplayUrl(source);
 
   return await new Promise((resolve, reject) => {
     image.onload = () => resolve(image);
     image.onerror = () => reject(new Error('图片加载失败'));
-    image.src = source;
+    image.src = displaySource;
   });
 }
 
 export async function imageUrlToDataUrl(imageUrl: string): Promise<string> {
   if (imageUrl.startsWith('data:')) {
     return imageUrl;
+  }
+
+  if (isLikelyLocalImagePath(imageUrl)) {
+    if (isTauri()) {
+      return await loadImage(imageUrl);
+    }
+    const localResponse = await fetch(resolveImageDisplayUrl(imageUrl));
+    if (!localResponse.ok) {
+      throw new Error('无法读取本地图片数据');
+    }
+    const localBlob = await localResponse.blob();
+    return await blobToDataUrl(localBlob);
   }
 
   const response = await fetch(imageUrl);
@@ -152,13 +240,19 @@ export async function prepareNodeImage(
   imageUrl: string,
   maxPreviewDimension = DEFAULT_PREVIEW_MAX_DIMENSION
 ): Promise<PreparedNodeImage> {
-  const normalizedDataUrl = await imageUrlToDataUrl(imageUrl);
+  const persistedImagePath = await persistImageLocally(imageUrl);
+  const normalizedDataUrl = await imageUrlToDataUrl(persistedImagePath);
   const image = await loadImageElement(normalizedDataUrl);
   const safeMaxDimension = Math.max(64, Math.floor(maxPreviewDimension));
+  const previewDataUrl = renderPreviewDataUrl(image, normalizedDataUrl, safeMaxDimension);
+  const previewImagePath =
+    previewDataUrl === normalizedDataUrl
+      ? persistedImagePath
+      : await persistImageLocally(previewDataUrl);
 
   return {
-    imageUrl: normalizedDataUrl,
-    previewImageUrl: renderPreviewDataUrl(image, normalizedDataUrl, safeMaxDimension),
+    imageUrl: persistedImagePath,
+    previewImageUrl: previewImagePath,
     aspectRatio: reduceAspectRatio(image.naturalWidth, image.naturalHeight),
   };
 }

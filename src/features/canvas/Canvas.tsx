@@ -59,8 +59,10 @@ interface PreviewConnectionVisual {
   stroke: string;
   strokeWidth: number;
   strokeLinecap: 'butt' | 'round' | 'square';
-  offsetX: number;
-  offsetY: number;
+  left: number;
+  top: number;
+  width: number;
+  height: number;
 }
 
 function resolveAllowedNodeTypes(handleType: HandleType): CanvasNodeType[] {
@@ -89,8 +91,11 @@ function createPreviewPath(line: PreviewConnectionLine): string {
   const { start, end, handleType } = line;
   const deltaX = end.x - start.x;
   const curveStrength = Math.max(36, Math.min(120, Math.abs(deltaX) * 0.4));
-  const startControlX = handleType === 'source' ? start.x + curveStrength : start.x - curveStrength;
-  const endControlX = end.x - curveStrength;
+  const handleDirection = handleType === 'source' ? 1 : -1;
+  const isReverseDrag = deltaX * handleDirection < 0;
+  const effectiveDirection = isReverseDrag ? -handleDirection : handleDirection;
+  const startControlX = start.x + effectiveDirection * curveStrength;
+  const endControlX = end.x - effectiveDirection * curveStrength;
 
   return `M ${start.x} ${start.y} C ${startControlX} ${start.y}, ${endControlX} ${end.y}, ${end.x} ${end.y}`;
 }
@@ -451,71 +456,50 @@ export function Canvas() {
         return;
       }
 
-      const liveConnectionPath = wrapperRef.current?.querySelector<SVGPathElement>(
-        '.react-flow__connection-path'
+      const endX = clientPosition.x - containerRect.left;
+      const endY = clientPosition.y - containerRect.top;
+      let startX: number | null = null;
+      let startY: number | null = null;
+
+      const nodeElement = wrapperRef.current?.querySelector<HTMLElement>(
+        `.react-flow__node[data-id="${pendingConnectStart.nodeId}"]`
       );
-      const livePathD = liveConnectionPath?.getAttribute('d');
-      if (liveConnectionPath && livePathD) {
-        const style = window.getComputedStyle(liveConnectionPath);
-        const strokeWidth = Number.parseFloat(style.strokeWidth || '1') || 1;
-        const strokeLinecap = (style.strokeLinecap as 'butt' | 'round' | 'square') || 'round';
-        const liveSvg = liveConnectionPath.closest('svg');
-        const liveSvgRect = liveSvg?.getBoundingClientRect();
-        const offsetX = liveSvgRect ? liveSvgRect.left - containerRect.left : 0;
-        const offsetY = liveSvgRect ? liveSvgRect.top - containerRect.top : 0;
+      const handleElement = nodeElement?.querySelector<HTMLElement>(
+        `.react-flow__handle-${pendingConnectStart.handleType}`
+      );
+      if (handleElement) {
+        const handleRect = handleElement.getBoundingClientRect();
+        startX = handleRect.left - containerRect.left + handleRect.width / 2;
+        startY = handleRect.top - containerRect.top + handleRect.height / 2;
+      } else if (nodeElement) {
+        const nodeRect = nodeElement.getBoundingClientRect();
+        startX =
+          pendingConnectStart.handleType === 'source'
+            ? nodeRect.right - containerRect.left
+            : nodeRect.left - containerRect.left;
+        startY = nodeRect.top - containerRect.top + nodeRect.height / 2;
+      } else if (connectionState.from) {
+        startX = connectionState.from.x;
+        startY = connectionState.from.y;
+      }
 
-        setPreviewConnectionVisual({
-          d: livePathD,
-          stroke: style.stroke || 'rgba(255,255,255,0.9)',
-          strokeWidth,
-          strokeLinecap,
-          offsetX,
-          offsetY,
-        });
+      if (startX === null || startY === null) {
+        setPreviewConnectionVisual(null);
       } else {
-        const endX = clientPosition.x - containerRect.left;
-        const endY = clientPosition.y - containerRect.top;
-        let startX: number | null = null;
-        let startY: number | null = null;
-
-        const nodeElement = wrapperRef.current?.querySelector<HTMLElement>(
-          `.react-flow__node[data-id="${pendingConnectStart.nodeId}"]`
-        );
-        const handleElement = nodeElement?.querySelector<HTMLElement>(
-          `.react-flow__handle-${pendingConnectStart.handleType}`
-        );
-        if (handleElement) {
-          const handleRect = handleElement.getBoundingClientRect();
-          startX = handleRect.left - containerRect.left + handleRect.width / 2;
-          startY = handleRect.top - containerRect.top + handleRect.height / 2;
-        } else if (nodeElement) {
-          const nodeRect = nodeElement.getBoundingClientRect();
-          startX =
-            pendingConnectStart.handleType === 'source'
-              ? nodeRect.right - containerRect.left
-              : nodeRect.left - containerRect.left;
-          startY = nodeRect.top - containerRect.top + nodeRect.height / 2;
-        } else if (connectionState.from) {
-          startX = connectionState.from.x;
-          startY = connectionState.from.y;
-        }
-
-        if (startX !== null && startY !== null) {
-          setPreviewConnectionVisual({
-            d: createPreviewPath({
-              start: { x: startX, y: startY },
-              end: { x: endX, y: endY },
-              handleType: pendingConnectStart.handleType,
-            }),
-            stroke: 'rgba(255,255,255,0.9)',
-            strokeWidth: 1,
-            strokeLinecap: 'round',
-            offsetX: 0,
-            offsetY: 0,
-          });
-        } else {
-          setPreviewConnectionVisual(null);
-        }
+        setPreviewConnectionVisual({
+          d: createPreviewPath({
+            start: { x: startX, y: startY },
+            end: { x: endX, y: endY },
+            handleType: pendingConnectStart.handleType,
+          }),
+          stroke: 'rgba(255,255,255,0.9)',
+          strokeWidth: 1,
+          strokeLinecap: 'round',
+          left: 0,
+          top: 0,
+          width: containerRect.width,
+          height: containerRect.height,
+        });
       }
 
       const flowPos = reactFlowInstance.screenToFlowPosition(clientPosition);
@@ -585,23 +569,24 @@ export function Canvas() {
 
       {showNodeMenu && previewConnectionVisual && (
         <svg
-          className="pointer-events-none absolute inset-0 z-40 h-full w-full overflow-visible"
-          width="100%"
-          height="100%"
+          className="pointer-events-none absolute z-40 overflow-visible"
+          style={{
+            left: previewConnectionVisual.left,
+            top: previewConnectionVisual.top,
+            width: previewConnectionVisual.width,
+            height: previewConnectionVisual.height,
+          }}
+          width={previewConnectionVisual.width}
+          height={previewConnectionVisual.height}
         >
-          <g
+          <path
             className="pointer-events-none"
-            transform={`translate(${previewConnectionVisual.offsetX}, ${previewConnectionVisual.offsetY})`}
-          >
-            <path
-              className="pointer-events-none"
-              d={previewConnectionVisual.d}
-              fill="none"
-              stroke={previewConnectionVisual.stroke}
-              strokeWidth={previewConnectionVisual.strokeWidth}
-              strokeLinecap={previewConnectionVisual.strokeLinecap}
-            />
-          </g>
+            d={previewConnectionVisual.d}
+            fill="none"
+            stroke={previewConnectionVisual.stroke}
+            strokeWidth={previewConnectionVisual.strokeWidth}
+            strokeLinecap={previewConnectionVisual.strokeLinecap}
+          />
         </svg>
       )}
 

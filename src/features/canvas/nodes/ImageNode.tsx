@@ -1,5 +1,5 @@
 import { memo, useEffect, useMemo, useState } from 'react';
-import { Handle, Position, type NodeProps } from '@xyflow/react';
+import { Handle, Position, useViewport, type NodeProps } from '@xyflow/react';
 import { Sparkles } from 'lucide-react';
 
 import {
@@ -7,6 +7,10 @@ import {
   DEFAULT_NODE_WIDTH,
   type ImageEditNodeData,
 } from '@/features/canvas/domain/canvasNodes';
+import {
+  resolveImageDisplayUrl,
+  shouldUseOriginalImageByZoom,
+} from '@/features/canvas/application/imageData';
 import { useCanvasStore } from '@/stores/canvasStore';
 
 type ImageNodeProps = NodeProps & {
@@ -22,6 +26,7 @@ function toCssAspectRatio(aspectRatio: string): string {
 
 export const ImageNode = memo(({ id, data, selected }: ImageNodeProps) => {
   const setSelectedNode = useCanvasStore((state) => state.setSelectedNode);
+  const { zoom } = useViewport();
   const [now, setNow] = useState(() => Date.now());
 
   useEffect(() => {
@@ -50,10 +55,18 @@ export const ImageNode = memo(({ id, data, selected }: ImageNodeProps) => {
     return Math.min(elapsed / duration, 0.96);
   }, [data.generationDurationMs, data.generationStartedAt, data.isGenerating, now]);
 
+  const imageSource = useMemo(() => {
+    const preferOriginal = shouldUseOriginalImageByZoom(zoom);
+    const picked = preferOriginal
+      ? data.imageUrl || data.previewImageUrl
+      : data.previewImageUrl || data.imageUrl;
+    return picked ? resolveImageDisplayUrl(picked) : null;
+  }, [data.imageUrl, data.previewImageUrl, zoom]);
+
   return (
     <div
       className={`
-        w-[220px] rounded-[24px] border bg-surface-dark/85 p-1 transition-all duration-150
+        w-[220px] rounded-[var(--node-radius)] border bg-surface-dark/85 p-0 transition-all duration-150
         ${selected
           ? 'border-accent shadow-[0_0_0_1px_rgba(59,130,246,0.32)]'
           : 'border-[rgba(255,255,255,0.22)] hover:border-[rgba(255,255,255,0.34)]'}
@@ -61,15 +74,14 @@ export const ImageNode = memo(({ id, data, selected }: ImageNodeProps) => {
       onClick={() => setSelectedNode(id)}
     >
       <div
-        className="relative overflow-hidden rounded-[19px] bg-bg-dark"
+        className="relative inset-0 overflow-hidden rounded-[var(--node-radius)] bg-bg-dark"
         style={{
-          width: DEFAULT_NODE_WIDTH - 8,
           aspectRatio: toCssAspectRatio(data.aspectRatio || DEFAULT_ASPECT_RATIO),
         }}
       >
         {data.imageUrl ? (
           <img
-            src={data.previewImageUrl || data.imageUrl}
+            src={imageSource ?? ''}
             alt="Generated"
             className="h-full w-full object-contain"
           />
@@ -81,7 +93,7 @@ export const ImageNode = memo(({ id, data, selected }: ImageNodeProps) => {
         )}
 
         {data.isGenerating && (
-          <div className="pointer-events-none absolute inset-0 overflow-hidden rounded-[19px]">
+          <div className="pointer-events-none absolute inset-0 overflow-hidden">
             <div className="absolute inset-0 bg-bg-dark/55" />
             <div
               className="absolute left-0 top-0 h-full bg-gradient-to-r from-[rgba(255,255,255,0.4)] to-[rgba(255,255,255,0.06)] transition-[width] duration-100 ease-linear"

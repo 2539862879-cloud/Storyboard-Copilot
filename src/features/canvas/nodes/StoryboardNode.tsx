@@ -6,14 +6,19 @@ import {
   type ChangeEvent,
   type DragEvent,
 } from 'react';
-import { Handle, Position, type NodeProps } from '@xyflow/react';
+import { Handle, Position, useViewport, type NodeProps } from '@xyflow/react';
 import { GripVertical, ImagePlus } from 'lucide-react';
 
 import type {
   StoryboardFrameItem,
   StoryboardSplitNodeData,
 } from '@/features/canvas/domain/canvasNodes';
-import { prepareNodeImage, readFileAsDataUrl } from '@/features/canvas/application/imageData';
+import {
+  prepareNodeImage,
+  readFileAsDataUrl,
+  resolveImageDisplayUrl,
+  shouldUseOriginalImageByZoom,
+} from '@/features/canvas/application/imageData';
 import { useCanvasStore } from '@/stores/canvasStore';
 
 type StoryboardNodeProps = NodeProps & {
@@ -43,6 +48,15 @@ const FrameCard = memo(
     onDragEnd,
   }: FrameCardProps) => {
     const updateStoryboardFrame = useCanvasStore((state) => state.updateStoryboardFrame);
+    const { zoom } = useViewport();
+
+    const imageSource = useMemo(() => {
+      const preferOriginal = shouldUseOriginalImageByZoom(zoom);
+      const picked = preferOriginal
+        ? frame.imageUrl || frame.previewImageUrl
+        : frame.previewImageUrl || frame.imageUrl;
+      return picked ? resolveImageDisplayUrl(picked) : null;
+    }, [frame.imageUrl, frame.previewImageUrl, zoom]);
 
     const handleUpload = useCallback(
       async (event: ChangeEvent<HTMLInputElement>) => {
@@ -52,7 +66,7 @@ const FrameCard = memo(
         }
 
         const imageUrl = await readFileAsDataUrl(file);
-        const prepared = await prepareNodeImage(imageUrl, 640);
+        const prepared = await prepareNodeImage(imageUrl, 384);
         updateStoryboardFrame(nodeId, frame.id, {
           imageUrl: prepared.imageUrl,
           previewImageUrl: prepared.previewImageUrl,
@@ -80,7 +94,7 @@ const FrameCard = memo(
         <div className="relative overflow-hidden rounded-md bg-surface-dark" style={{ aspectRatio: '1 / 1' }}>
           {frame.imageUrl ? (
             <img
-              src={frame.previewImageUrl || frame.imageUrl}
+              src={imageSource ?? ''}
               alt={`Frame ${index + 1}`}
               className="h-full w-full object-cover"
             />
@@ -139,7 +153,7 @@ export const StoryboardNode = memo(({ id, data, selected }: StoryboardNodeProps)
   return (
     <div
       className={`
-        min-w-[320px] rounded-[20px] border bg-surface-dark/85 p-2 transition-all duration-150
+        min-w-[320px] rounded-[var(--node-radius)] border bg-surface-dark/85 p-2 transition-all duration-150
         ${selected
           ? 'border-accent shadow-[0_0_0_1px_rgba(59,130,246,0.32)]'
           : 'border-[rgba(255,255,255,0.22)]'}

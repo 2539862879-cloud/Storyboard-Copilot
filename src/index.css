@@ -17,6 +17,8 @@
   --ui-radius-lg: 12px;
   --ui-radius-xl: 16px;
   --ui-radius-2xl: 20px;
+  --node-radius: 12px;
+  --node-inner-radius: var(--node-radius);
 }
 
 .dark {
@@ -33,6 +35,8 @@
   --ui-radius-lg: 12px;
   --ui-radius-xl: 16px;
   --ui-radius-2xl: 20px;
+  --node-radius: 12px;
+  --node-inner-radius: var(--node-radius);
 }
 
 * {

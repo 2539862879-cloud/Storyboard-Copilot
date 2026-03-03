@@ -5,11 +5,11 @@ import {
 } from '../domain/canvasNodes';
 import {
   canvasToDataUrl,
-  createPreviewDataUrl,
   extractBase64Payload,
   imageUrlToDataUrl,
   loadImageElement,
   parseAspectRatio,
+  prepareNodeImage,
 } from './imageData';
 import { drawAnnotations, parseAnnotationItems } from '../tools/annotation';
 import type {
@@ -203,13 +203,16 @@ export class CanvasToolProcessor implements ToolProcessor {
     }
 
     const frames: StoryboardFrameItem[] = await Promise.all(
-      outputs.map(async (imageUrl, index) => ({
-        id: this.idGenerator.next(),
-        imageUrl,
-        previewImageUrl: await createPreviewDataUrl(imageUrl, 640),
-        note: '',
-        order: index,
-      }))
+      outputs.map(async (imageUrl, index) => {
+        const prepared = await prepareNodeImage(imageUrl, 384);
+        return {
+          id: this.idGenerator.next(),
+          imageUrl: prepared.imageUrl,
+          previewImageUrl: prepared.previewImageUrl,
+          note: '',
+          order: index,
+        };
+      })
     );
 
     return {

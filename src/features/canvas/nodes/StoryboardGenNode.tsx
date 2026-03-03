@@ -58,6 +58,11 @@ const STORYBOARD_GRID_GAP_PX = 2;
 const STORYBOARD_GRID_BASE_CELL_HEIGHT_PX = 78;
 const STORYBOARD_GRID_MAX_WIDTH_PX = 320;
 const STORYBOARD_CONTROL_ROW_WIDTH_PX = 274;
+const STORYBOARD_FRAME_TEXTAREA_SCROLLBAR_CLASS =
+  '[scrollbar-width:thin] [scrollbar-color:rgba(148,163,184,0.55)_transparent] ' +
+  '[&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-track]:bg-transparent ' +
+  '[&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-[rgba(148,163,184,0.5)] ' +
+  'hover:[&::-webkit-scrollbar-thumb]:bg-[rgba(148,163,184,0.72)]';
 
 function pickClosestAspectRatio(
   targetRatio: number,
@@ -95,6 +100,8 @@ export const StoryboardGenNode = memo(({ id, data, selected }: StoryboardGenNode
   const updateNodeData = useCanvasStore((state) => state.updateNodeData);
   const updateNodePosition = useCanvasStore((state) => state.updateNodePosition);
   const addNode = useCanvasStore((state) => state.addNode);
+  const addEdge = useCanvasStore((state) => state.addEdge);
+  const findNodePosition = useCanvasStore((state) => state.findNodePosition);
   const apiKey = useSettingsStore((state) => state.apiKey);
 
   const [error, setError] = useState<string | null>(null);
@@ -317,9 +324,6 @@ export const StoryboardGenNode = memo(({ id, data, selected }: StoryboardGenNode
     if (!nodeData) {
       return;
     }
-    if (nodeData.isGenerating) {
-      return;
-    }
 
     const prompt = buildPrompt();
     if (!prompt) {
@@ -333,11 +337,28 @@ export const StoryboardGenNode = memo(({ id, data, selected }: StoryboardGenNode
     }
 
     const generationDurationMs = selectedModel.expectedDurationMs ?? 60000;
-    updateNodeData(id, {
-      isGenerating: true,
-      generationStartedAt: Date.now(),
-      generationDurationMs,
-    });
+    const generationStartedAt = Date.now();
+
+    // Create new image node with generating state immediately
+    // Use auto-positioning to avoid collisions with existing nodes
+    const newNodePosition = findNodePosition(id, 220, 180);
+    const newNodeId = addNode(
+      CANVAS_NODE_TYPES.imageEdit,
+      newNodePosition,
+      {
+        isGenerating: true,
+        generationStartedAt,
+        generationDurationMs,
+        prompt: '',
+        model: selectedModel.id,
+        size: selectedResolution.value as ImageSize,
+        requestAspectRatio: selectedAspectRatio.value,
+      }
+    );
+
+    // Connect the storyboard node to the new image node
+    addEdge(id, newNodeId);
+
     setSelectedNode(null);
     setError(null);
 
@@ -372,35 +393,18 @@ export const StoryboardGenNode = memo(({ id, data, selected }: StoryboardGenNode
 
       const prepared = await prepareNodeImage(resultUrl);
 
-      // Create new image node with generated result
-      const newNodeX = (currentNode?.position.x || 0) + 300;
-      const newNodeY = currentNode?.position.y || 0;
-      addNode(
-        CANVAS_NODE_TYPES.imageEdit,
-        { x: newNodeX, y: newNodeY },
-        {
-          imageUrl: prepared.imageUrl,
-          previewImageUrl: prepared.previewImageUrl,
-          aspectRatio: prepared.aspectRatio,
-          prompt: '',
-          model: selectedModel.id,
-          size: selectedResolution.value as ImageSize,
-          requestAspectRatio: selectedAspectRatio.value,
-        }
-      );
-
-      // Update original node and connect
-      updateNodeData(id, {
+      // Update the new image node with generated result
+      updateNodeData(newNodeId, {
         imageUrl: prepared.imageUrl,
         previewImageUrl: prepared.previewImageUrl,
         aspectRatio: prepared.aspectRatio,
-        requestAspectRatio: selectedAspectRatio.value,
         isGenerating: false,
         generationStartedAt: null,
       });
     } catch (generationError) {
       setError(generationError instanceof Error ? generationError.message : '生成失败');
-      updateNodeData(id, {
+      // Clear generating state and mark as failed
+      updateNodeData(newNodeId, {
         isGenerating: false,
         generationStartedAt: null,
       });
@@ -415,10 +419,12 @@ export const StoryboardGenNode = memo(({ id, data, selected }: StoryboardGenNode
     setSelectedNode,
     selectedAspectRatio.value,
     selectedResolution.value,
-    updateNodeData,
     addNode,
+    addEdge,
     buildPrompt,
     selectedModel.id,
+    findNodePosition,
+    updateNodeData,
   ]);
 
   const handleRowChange = useCallback(
@@ -459,17 +465,14 @@ export const StoryboardGenNode = memo(({ id, data, selected }: StoryboardGenNode
     return null;
   }
 
-  const hasImage = Boolean(nodeData.imageUrl);
-
   return (
     <div
       ref={rootRef}
       className={`
-        rounded-2xl border bg-surface-dark/95 p-3 transition-all duration-150
-        ${
-          selected
-            ? 'border-accent shadow-[0_0_0_1px_rgba(59,130,246,0.32)]'
-            : 'border-[rgba(255,255,255,0.22)] hover:border-[rgba(255,255,255,0.34)]'
+        rounded-[var(--node-radius)] border bg-surface-dark/95 p-3 transition-all duration-150
+        ${selected
+          ? 'border-accent shadow-[0_0_0_1px_rgba(59,130,246,0.32)]'
+          : 'border-[rgba(255,255,255,0.22)] hover:border-[rgba(255,255,255,0.34)]'
         }
       `}
       style={{ width: `${frameLayout.nodeWidth}px` }}
@@ -538,14 +541,12 @@ export const StoryboardGenNode = memo(({ id, data, selected }: StoryboardGenNode
               className="relative overflow-hidden rounded border border-[rgba(255,255,255,0.06)] bg-bg-dark/40"
               style={{ aspectRatio: frameLayout.cellAspectRatio }}
             >
-              <input
-                type="text"
+              <textarea
                 value={frame.description}
-                onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
-                  handleFrameDescriptionChange(index, e.target.value)
-                }
+                onChange={(e) => handleFrameDescriptionChange(index, e.target.value)}
                 placeholder="..."
-                className="absolute inset-0 h-full w-full bg-transparent px-1.5 text-[10px] text-text-dark placeholder:text-text-muted/40 focus:border-accent/50 focus:outline-none"
+                wrap="soft"
+                className={`nodrag nowheel absolute inset-0 h-full w-full resize-none overflow-y-auto overflow-x-hidden bg-transparent px-1.5 py-1 text-left text-[10px] leading-4 text-text-dark placeholder:text-text-muted/40 focus:border-accent/50 focus:outline-none whitespace-pre-wrap break-words ${STORYBOARD_FRAME_TEXTAREA_SCROLLBAR_CLASS}`}
               />
             </div>
           ))}
@@ -553,7 +554,7 @@ export const StoryboardGenNode = memo(({ id, data, selected }: StoryboardGenNode
       </div>
 
       {/* AI Parameters */}
-      <div className="relative mx-auto flex w-[274px] items-center gap-1">
+      <div className="relative mx-auto flex w-[280px] items-center justify-between">
         <ModelParamsControls
           imageModels={imageModels}
           selectedModel={selectedModel}
@@ -567,43 +568,27 @@ export const StoryboardGenNode = memo(({ id, data, selected }: StoryboardGenNode
           onAspectRatioChange={(aspectRatio) =>
             updateNodeData(id, { requestAspectRatio: aspectRatio })
           }
-          chipClassName="!h-6 !gap-1 !rounded-md !px-2 !text-xs"
-          modelChipClassName="!w-[148px] !justify-start"
-          paramsChipClassName="!w-[90px] !justify-start"
-          modelPanelAlign="start"
-          paramsPanelAlign="start"
-          modelPanelClassName="w-[280px] p-2"
-          paramsPanelClassName="w-[260px] p-2"
+          triggerSize="sm"
+          chipClassName="!h-5 !gap-1 !rounded-md !px-1.5 !text-[11px]"
+          modelChipClassName="!w-[160px] !justify-start"
+          paramsChipClassName="!w-[78px] !justify-start"
+          modelPanelAlign="center"
+          paramsPanelAlign="center"
+          modelPanelClassName="w-[360px] p-2"
+          paramsPanelClassName="w-[420px] p-3"
         />
 
         <UiButton
           onClick={(e) => { e.stopPropagation(); handleGenerate(); }}
           variant="primary"
           size="sm"
-          className="!h-6 !w-6 !min-w-0 shrink-0 !rounded-md !p-0"
-          disabled={nodeData.isGenerating}
+          className="!h-5 !w-5 !min-w-0 shrink-0 !rounded-md !p-0"
         >
-          <ArrowUp className="h-3 w-3" strokeWidth={2.8} />
+          <ArrowUp className="h-2.5 w-2.5" strokeWidth={2.8} />
         </UiButton>
       </div>
 
       {error && <div className="mt-2 text-[10px] text-red-400">{error}</div>}
-
-      {/* Generated Image Preview */}
-      {hasImage && !nodeData.isGenerating && (
-        <div
-          className="mt-3 overflow-hidden rounded-lg"
-          style={{
-            aspectRatio: toCssAspectRatio(nodeData.aspectRatio || DEFAULT_ASPECT_RATIO),
-          }}
-        >
-          <img
-            src={nodeData.previewImageUrl || nodeData.imageUrl || ''}
-            alt="Generated"
-            className="h-full w-full object-contain"
-          />
-        </div>
-      )}
 
       <Handle
         type="target"

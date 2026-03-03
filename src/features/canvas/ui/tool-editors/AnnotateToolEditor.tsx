@@ -11,6 +11,7 @@ import {
   type AnnotationItem,
   type AnnotationToolType,
 } from '@/features/canvas/tools/annotation';
+import { resolveImageDisplayUrl } from '@/features/canvas/application/imageData';
 import type { VisualToolEditorProps } from './types';
 
 type DraftState = {
@@ -144,7 +145,7 @@ export function AnnotateToolEditor({ options, onOptionsChange, sourceImageUrl }:
     const img = new window.Image();
     img.onload = () => setImage(img);
     img.onerror = () => setImage(null);
-    img.src = sourceImageUrl;
+    img.src = resolveImageDisplayUrl(sourceImageUrl);
   }, [sourceImageUrl]);
 
   const { stageWidth, stageHeight, scale } = useMemo(() => {

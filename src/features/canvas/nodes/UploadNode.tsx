@@ -2,11 +2,12 @@ import {
   memo,
   useCallback,
   useEffect,
+  useMemo,
   useRef,
   type ChangeEvent,
   type DragEvent,
 } from 'react';
-import { Handle, Position, type NodeProps } from '@xyflow/react';
+import { Handle, Position, useViewport, type NodeProps } from '@xyflow/react';
 import { Upload } from 'lucide-react';
 
 import {
@@ -15,7 +16,12 @@ import {
   type UploadImageNodeData,
 } from '@/features/canvas/domain/canvasNodes';
 import { canvasEventBus } from '@/features/canvas/application/canvasServices';
-import { prepareNodeImage, readFileAsDataUrl } from '@/features/canvas/application/imageData';
+import {
+  prepareNodeImage,
+  readFileAsDataUrl,
+  resolveImageDisplayUrl,
+  shouldUseOriginalImageByZoom,
+} from '@/features/canvas/application/imageData';
 import { useCanvasStore } from '@/stores/canvasStore';
 
 type UploadNodeProps = NodeProps & {
@@ -32,6 +38,7 @@ function toCssAspectRatio(aspectRatio: string): string {
 export const UploadNode = memo(({ id, data, selected }: UploadNodeProps) => {
   const setSelectedNode = useCanvasStore((state) => state.setSelectedNode);
   const updateNodeData = useCanvasStore((state) => state.updateNodeData);
+  const { zoom } = useViewport();
   const inputRef = useRef<HTMLInputElement>(null);
 
   const processFile = useCallback(
@@ -89,10 +96,18 @@ export const UploadNode = memo(({ id, data, selected }: UploadNodeProps) => {
     }
   }, [data.imageUrl, id, setSelectedNode]);
 
+  const imageSource = useMemo(() => {
+    const preferOriginal = shouldUseOriginalImageByZoom(zoom);
+    const picked = preferOriginal
+      ? data.imageUrl || data.previewImageUrl
+      : data.previewImageUrl || data.imageUrl;
+    return picked ? resolveImageDisplayUrl(picked) : null;
+  }, [data.imageUrl, data.previewImageUrl, zoom]);
+
   return (
     <div
       className={`
-        w-[220px] rounded-[24px] border bg-surface-dark/85 p-1 transition-all duration-150
+        w-[220px] rounded-[var(--node-radius)] border bg-surface-dark/85 p-0 transition-all duration-150
         ${selected
           ? 'border-accent shadow-[0_0_0_1px_rgba(59,130,246,0.32)]'
           : 'border-[rgba(255,255,255,0.22)] hover:border-[rgba(255,255,255,0.34)]'}
@@ -101,23 +116,21 @@ export const UploadNode = memo(({ id, data, selected }: UploadNodeProps) => {
     >
       {data.imageUrl ? (
         <div
-          className="block overflow-hidden rounded-[19px] border border-[rgba(255,255,255,0.14)] bg-bg-dark"
+          className="block inset-0 overflow-hidden rounded-[var(--node-radius)] bg-bg-dark"
           style={{
-            width: DEFAULT_NODE_WIDTH - 8,
             aspectRatio: toCssAspectRatio(data.aspectRatio || DEFAULT_ASPECT_RATIO),
           }}
         >
           <img
-            src={data.previewImageUrl || data.imageUrl}
+            src={imageSource ?? ''}
             alt="Uploaded"
             className="h-full w-full object-cover"
           />
         </div>
       ) : (
         <label
-          className="block overflow-hidden rounded-[19px] border border-[rgba(255,255,255,0.14)] bg-bg-dark"
+          className="block inset-0 overflow-hidden rounded-[var(--node-radius)] bg-bg-dark"
           style={{
-            width: DEFAULT_NODE_WIDTH - 8,
             aspectRatio: toCssAspectRatio(data.aspectRatio || DEFAULT_ASPECT_RATIO),
           }}
           onDrop={handleDrop}

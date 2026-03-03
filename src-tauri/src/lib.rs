@@ -30,8 +30,8 @@ pub fn run() {
         .plugin(tauri_plugin_opener::init())
         .invoke_handler(tauri::generate_handler![
             image::split_image,
-            image::save_image,
             image::load_image,
+            image::persist_image_source,
             ai_commands::set_api_key,
             ai_commands::generate_image,
             ai_commands::list_models,

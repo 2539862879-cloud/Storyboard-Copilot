@@ -7,6 +7,7 @@ import ReactCrop, {
 } from 'react-image-crop';
 import 'react-image-crop/dist/ReactCrop.css';
 
+import { resolveImageDisplayUrl } from '@/features/canvas/application/imageData';
 import type { ToolSelectField } from '@/features/canvas/tools';
 import type { VisualToolEditorProps } from './types';
 
@@ -110,6 +111,10 @@ export function CropToolEditor({ plugin, sourceImageUrl, options, onOptionsChang
   const [crop, setCrop] = useState<Crop>();
   const [customRatioInput, setCustomRatioInput] = useState(
     typeof options.customAspectRatio === 'string' ? options.customAspectRatio : ''
+  );
+  const displaySourceImageUrl = useMemo(
+    () => resolveImageDisplayUrl(sourceImageUrl),
+    [sourceImageUrl]
   );
 
   const ratioOptions = useMemo(() => {
@@ -323,7 +328,7 @@ export function CropToolEditor({ plugin, sourceImageUrl, options, onOptionsChang
         >
           <img
             ref={imageRef}
-            src={sourceImageUrl}
+            src={displaySourceImageUrl}
             alt="Crop Source"
             className="max-h-[480px] w-auto max-w-full object-contain"
             onLoad={handleImageLoad}

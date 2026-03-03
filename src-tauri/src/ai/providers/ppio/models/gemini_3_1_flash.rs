@@ -31,6 +31,13 @@ impl Gemini31FlashAdapter {
     }
 }
 
+fn truncate_for_log(input: &str, max_chars: usize) -> String {
+    if input.chars().count() <= max_chars {
+        return input.to_string();
+    }
+    input.chars().take(max_chars).collect::<String>()
+}
+
 impl Default for Gemini31FlashAdapter {
     fn default() -> Self {
         Self::new()
@@ -90,7 +97,7 @@ impl PPIOModelAdapter for Gemini31FlashAdapter {
                 image_base64s.len(),
                 request.size,
                 request.aspect_ratio,
-                &request.prompt[..request.prompt.len().min(100)]
+                truncate_for_log(&request.prompt, 100)
             );
 
             Ok(PreparedRequest {
@@ -110,7 +117,7 @@ impl PPIOModelAdapter for Gemini31FlashAdapter {
                 "model: ppio/gemini-3.1-flash, mode: generate, size: {}, aspect_ratio: {}, prompt: {}",
                 request.size,
                 request.aspect_ratio,
-                &request.prompt[..request.prompt.len().min(100)]
+                truncate_for_log(&request.prompt, 100)
             );
 
             Ok(PreparedRequest {

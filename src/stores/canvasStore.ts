@@ -64,6 +64,8 @@ interface CanvasState {
     position: { x: number; y: number },
     data?: Partial<CanvasNodeData>
   ) => string;
+  addEdge: (source: string, target: string) => string | null;
+  findNodePosition: (sourceNodeId: string, newNodeWidth: number, newNodeHeight: number) => { x: number; y: number };
   addDerivedUploadNode: (
     sourceNodeId: string,
     imageUrl: string,
@@ -136,6 +138,14 @@ function normalizeNodes(rawNodes: CanvasNode[]): CanvasNode[] {
 
       if ('aspectRatio' in mergedData && !mergedData.aspectRatio) {
         mergedData.aspectRatio = DEFAULT_ASPECT_RATIO;
+      }
+
+      // Generation tasks do not survive app reload, reset transient generating state.
+      if ('isGenerating' in mergedData && mergedData.isGenerating) {
+        mergedData.isGenerating = false;
+        if ('generationStartedAt' in mergedData) {
+          mergedData.generationStartedAt = null;
+        }
       }
 
       return {
@@ -326,6 +336,87 @@ export const useCanvasStore = create<CanvasState>((set, get) => ({
       dragHistorySnapshot: null,
     });
     return newNode.id;
+  },
+
+  addEdge: (source, target) => {
+    const state = get();
+    // Check if both nodes exist
+    const sourceNode = state.nodes.find((n) => n.id === source);
+    const targetNode = state.nodes.find((n) => n.id === target);
+    if (!sourceNode || !targetNode) {
+      return null;
+    }
+
+    const edgeId = `e-${source}-${target}`;
+    // Check if edge already exists
+    if (state.edges.some((e) => e.id === edgeId)) {
+      return edgeId;
+    }
+
+    const newEdge: CanvasEdge = {
+      id: edgeId,
+      source,
+      target,
+      type: 'disconnectableEdge',
+    };
+
+    set({
+      edges: [...state.edges, newEdge],
+    });
+
+    return edgeId;
+  },
+
+  findNodePosition: (sourceNodeId, newNodeWidth, newNodeHeight) => {
+    const state = get();
+    const sourceNode = state.nodes.find((n) => n.id === sourceNodeId);
+    if (!sourceNode) {
+      return { x: 100, y: 100 };
+    }
+
+    // Helper to check if a position collides with existing nodes.
+    const collides = (x: number, y: number, width: number, height: number) => {
+      return state.nodes.some((node) => {
+        const nodeWidth = node.measured?.width ?? DEFAULT_NODE_WIDTH;
+        const nodeHeight = node.measured?.height ?? 200;
+        const margin = 20;
+        return (
+          x < node.position.x + nodeWidth + margin &&
+          x + width + margin > node.position.x &&
+          y < node.position.y + nodeHeight + margin &&
+          y + height + margin > node.position.y
+        );
+      });
+    };
+
+    const sourceWidth = sourceNode.measured?.width ?? DEFAULT_NODE_WIDTH;
+    const anchorX = sourceNode.position.x + sourceWidth + 56;
+    const anchorY = sourceNode.position.y;
+
+    const stepX = Math.max(newNodeWidth + 22, 180);
+    const stepY = Math.max(Math.round(newNodeHeight * 0.62), 112);
+    const maxColumns = 7;
+    const maxBands = 4;
+
+    // Keep new nodes close first: center, then +-1, +-2...
+    for (let col = 0; col < maxColumns; col += 1) {
+      const candidateX = anchorX + col * stepX;
+      for (let band = 0; band <= maxBands; band += 1) {
+        const offsets = band === 0 ? [0] : [-band, band];
+        for (const offset of offsets) {
+          const candidateY = anchorY + offset * stepY;
+          if (!collides(candidateX, candidateY, newNodeWidth, newNodeHeight)) {
+            return { x: candidateX, y: candidateY };
+          }
+        }
+      }
+    }
+
+    // Fallback: place farther right of the scanned area.
+    return {
+      x: anchorX + maxColumns * stepX,
+      y: anchorY,
+    };
   },
 
   addDerivedUploadNode: (sourceNodeId, imageUrl, aspectRatio, previewImageUrl) => {

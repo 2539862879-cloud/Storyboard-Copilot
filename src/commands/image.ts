@@ -12,18 +12,12 @@ export async function splitImage(
   });
 }
 
-export async function saveImage(
-  imageBase64: string,
-  filePath: string
-): Promise<void> {
-  return await invoke('save_image', {
-    imageBase64,
-    filePath,
-  });
-}
-
 export async function loadImage(filePath: string): Promise<string> {
   return await invoke('load_image', {
     filePath,
   });
+}
+
+export async function persistImageSource(source: string): Promise<string> {
+  return await invoke('persist_image_source', { source });
 }

@@ -1,6 +1,9 @@
 use base64::{engine::general_purpose::STANDARD, Engine};
 use image::GenericImageView;
+use md5;
 use std::io::Cursor;
+use std::path::{Path, PathBuf};
+use tauri::{AppHandle, Manager};
 use tracing::info;
 
 #[tauri::command]
@@ -45,18 +48,163 @@ pub async fn split_image(
     Ok(results)
 }
 
+fn resolve_images_dir(app: &AppHandle) -> Result<PathBuf, String> {
+    let app_data_dir = app
+        .path()
+        .app_data_dir()
+        .map_err(|e| format!("Failed to resolve app data dir: {}", e))?;
+
+    let images_dir = app_data_dir.join("images");
+    std::fs::create_dir_all(&images_dir)
+        .map_err(|e| format!("Failed to create images dir: {}", e))?;
+
+    Ok(images_dir)
+}
+
+fn normalize_extension(raw_ext: &str) -> String {
+    let ext = raw_ext.trim().trim_start_matches('.').to_ascii_lowercase();
+    if ext.is_empty() {
+        return "png".to_string();
+    }
+
+    if ext == "jpeg" {
+        return "jpg".to_string();
+    }
+
+    ext
+}
+
+fn extension_from_mime(mime: &str) -> String {
+    let normalized = mime.trim().to_ascii_lowercase();
+    match normalized.as_str() {
+        "image/png" => "png".to_string(),
+        "image/jpeg" => "jpg".to_string(),
+        "image/jpg" => "jpg".to_string(),
+        "image/webp" => "webp".to_string(),
+        "image/gif" => "gif".to_string(),
+        "image/bmp" => "bmp".to_string(),
+        "image/avif" => "avif".to_string(),
+        _ => "png".to_string(),
+    }
+}
+
+fn extension_from_path_like(value: &str) -> Option<String> {
+    let cleaned = value
+        .split('#')
+        .next()
+        .unwrap_or(value)
+        .split('?')
+        .next()
+        .unwrap_or(value);
+    let ext = Path::new(cleaned)
+        .extension()
+        .and_then(|item| item.to_str())
+        .map(normalize_extension)?;
+
+    Some(ext)
+}
+
+fn parse_data_url(source: &str) -> Result<(Vec<u8>, String), String> {
+    let (meta, payload) = source
+        .split_once(',')
+        .ok_or_else(|| "Invalid data URL format".to_string())?;
+
+    if !meta.starts_with("data:") || !meta.ends_with(";base64") {
+        return Err("Only base64 data URL is supported".to_string());
+    }
+
+    let mime = meta
+        .strip_prefix("data:")
+        .and_then(|v| v.strip_suffix(";base64"))
+        .unwrap_or("image/png");
+
+    let bytes = STANDARD
+        .decode(payload)
+        .map_err(|e| format!("Failed to decode data URL: {}", e))?;
+
+    Ok((bytes, extension_from_mime(mime)))
+}
+
+async fn resolve_source_bytes(source: &str) -> Result<(Vec<u8>, String), String> {
+    if source.starts_with("data:") {
+        return parse_data_url(source);
+    }
+
+    if source.starts_with("http://") || source.starts_with("https://") {
+        let response = reqwest::get(source)
+            .await
+            .map_err(|e| format!("Failed to download remote image: {}", e))?;
+
+        if !response.status().is_success() {
+            return Err(format!(
+                "Remote image request failed with status {}",
+                response.status()
+            ));
+        }
+
+        let mime_ext = response
+            .headers()
+            .get(reqwest::header::CONTENT_TYPE)
+            .and_then(|value| value.to_str().ok())
+            .map(extension_from_mime);
+
+        let bytes = response
+            .bytes()
+            .await
+            .map_err(|e| format!("Failed to read remote image body: {}", e))?
+            .to_vec();
+
+        let ext = mime_ext
+            .or_else(|| extension_from_path_like(source))
+            .unwrap_or_else(|| "png".to_string());
+
+        return Ok((bytes, ext));
+    }
+
+    if source.starts_with("file://") {
+        let file_path = source.trim_start_matches("file://");
+        let local_path = PathBuf::from(file_path);
+        let bytes = std::fs::read(&local_path)
+            .map_err(|e| format!("Failed to read file:// image source: {}", e))?;
+        let ext = local_path
+            .extension()
+            .and_then(|item| item.to_str())
+            .map(normalize_extension)
+            .unwrap_or_else(|| "png".to_string());
+        return Ok((bytes, ext));
+    }
+
+    let local_path = PathBuf::from(source);
+    let bytes = std::fs::read(&local_path)
+        .map_err(|e| format!("Failed to read local image source: {}", e))?;
+    let ext = local_path
+        .extension()
+        .and_then(|item| item.to_str())
+        .map(normalize_extension)
+        .unwrap_or_else(|| "png".to_string());
+
+    Ok((bytes, ext))
+}
+
 #[tauri::command]
-pub async fn save_image(image_base64: String, file_path: String) -> Result<(), String> {
-    info!("Saving image to: {}", file_path);
+pub async fn persist_image_source(app: AppHandle, source: String) -> Result<String, String> {
+    let trimmed = source.trim();
+    if trimmed.is_empty() {
+        return Err("Image source is empty".to_string());
+    }
 
-    let image_data = STANDARD
-        .decode(&image_base64)
-        .map_err(|e| format!("Failed to decode base64: {}", e))?;
+    let (bytes, extension) = resolve_source_bytes(trimmed).await?;
+    let images_dir = resolve_images_dir(&app)?;
+    let digest = md5::compute(&bytes);
+    let filename = format!("{:x}.{}", digest, extension);
+    let output_path = images_dir.join(filename);
 
-    std::fs::write(&file_path, image_data).map_err(|e| format!("Failed to write file: {}", e))?;
+    if !output_path.exists() {
+        std::fs::write(&output_path, bytes)
+            .map_err(|e| format!("Failed to persist image source: {}", e))?;
+    }
 
-    info!("Image saved successfully");
-    Ok(())
+    Ok(output_path.to_string_lossy().to_string())
 }
 
 #[tauri::command]

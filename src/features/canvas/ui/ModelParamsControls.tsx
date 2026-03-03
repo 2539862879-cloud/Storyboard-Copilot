@@ -23,6 +23,8 @@ interface ModelParamsControlsProps {
   onModelChange: (modelId: string) => void;
   onResolutionChange: (resolution: string) => void;
   onAspectRatioChange: (aspectRatio: string) => void;
+  showProviderName?: boolean;
+  triggerSize?: 'md' | 'sm';
   chipClassName?: string;
   modelChipClassName?: string;
   paramsChipClassName?: string;
@@ -83,6 +85,8 @@ export const ModelParamsControls = memo(({
   onModelChange,
   onResolutionChange,
   onAspectRatioChange,
+  showProviderName = true,
+  triggerSize = 'md',
   chipClassName = '',
   modelChipClassName = 'w-[220px] justify-start',
   paramsChipClassName = 'w-[120px] justify-start',
@@ -106,6 +110,21 @@ export const ModelParamsControls = memo(({
     () => getModelProvider(selectedModel.providerId),
     [selectedModel.providerId]
   );
+  const isCompactTrigger = triggerSize === 'sm';
+  const modelIconClassName = isCompactTrigger ? 'h-3 w-3 shrink-0' : 'h-4 w-4 shrink-0';
+  const paramsIconClassName = isCompactTrigger ? 'h-2.5 w-2.5 shrink-0' : 'h-4 w-4 shrink-0';
+  const modelTextClassName = isCompactTrigger
+    ? 'min-w-0 truncate text-[10px] font-medium leading-none'
+    : 'min-w-0 truncate font-medium';
+  const providerTextClassName = isCompactTrigger
+    ? 'shrink-0 text-[10px] leading-none text-text-muted/80'
+    : 'shrink-0 text-text-muted/80';
+  const paramsPrimaryTextClassName = isCompactTrigger
+    ? 'truncate text-[10px] leading-none'
+    : 'truncate';
+  const paramsSecondaryTextClassName = isCompactTrigger
+    ? 'text-[10px] leading-none text-text-muted/80'
+    : 'text-text-muted/80';
 
   useEffect(() => {
     const animationDurationMs = 200;
@@ -229,7 +248,7 @@ export const ModelParamsControls = memo(({
 
   return (
     <div ref={containerRef} className="flex items-center gap-1">
-      <div ref={modelTriggerRef} className="relative">
+      <div ref={modelTriggerRef} className="relative flex">
         <UiChipButton
           active={openPanel === 'model'}
           className={`${chipClassName} ${modelChipClassName}`}
@@ -243,13 +262,15 @@ export const ModelParamsControls = memo(({
             setOpenPanel('model');
           }}
         >
-          <NanoBananaIcon className="h-4 w-4" />
-          <span className="min-w-0 truncate font-medium">{selectedModel.displayName}</span>
-          <span className="shrink-0 text-text-muted/80">{selectedProvider.name}</span>
+          <NanoBananaIcon className={modelIconClassName} />
+          <span className={modelTextClassName}>{selectedModel.displayName}</span>
+          {showProviderName && (
+            <span className={providerTextClassName}>{selectedProvider.name}</span>
+          )}
         </UiChipButton>
       </div>
 
-      <div ref={paramsTriggerRef} className="relative">
+      <div ref={paramsTriggerRef} className="relative flex">
         <UiChipButton
           active={openPanel === 'params'}
           className={`${chipClassName} ${paramsChipClassName}`}
@@ -263,18 +284,17 @@ export const ModelParamsControls = memo(({
             setOpenPanel('params');
           }}
         >
-          <SlidersHorizontal className="h-4 w-4" />
-          <span className="truncate">{selectedAspectRatio.label}</span>
-          <span className="text-text-muted/80">· {selectedResolution.label}</span>
+          <SlidersHorizontal className={paramsIconClassName} />
+          <span className={paramsPrimaryTextClassName}>{selectedAspectRatio.label}</span>
+          <span className={paramsSecondaryTextClassName}>· {selectedResolution.label}</span>
         </UiChipButton>
       </div>
 
       {typeof document !== 'undefined' && renderPanel === 'model' && createPortal(
         <div
           ref={modelPanelRef}
-          className={`fixed z-[80] transform-gpu transition-all duration-200 ease-out ${
-            isPanelVisible ? 'opacity-100' : 'pointer-events-none opacity-0'
-          }`}
+          className={`fixed z-[80] transform-gpu transition-all duration-200 ease-out ${isPanelVisible ? 'opacity-100' : 'pointer-events-none opacity-0'
+            }`}
           style={buildPanelStyle(modelPanelAnchor, modelPanelAlign)}
         >
           <UiPanel className={modelPanelClassName}>
@@ -286,11 +306,10 @@ export const ModelParamsControls = memo(({
                 return (
                   <button
                     key={model.id}
-                    className={`flex w-full items-start gap-3 rounded-xl border px-3 py-2 text-left transition-colors ${
-                      active
-                        ? 'border-accent/45 bg-accent/15'
-                        : 'border-transparent bg-bg-dark/70 hover:border-[rgba(255,255,255,0.14)]'
-                    }`}
+                    className={`flex w-full items-start gap-3 rounded-xl border px-3 py-2 text-left transition-colors ${active
+                      ? 'border-accent/45 bg-accent/15'
+                      : 'border-transparent bg-bg-dark/70 hover:border-[rgba(255,255,255,0.14)]'
+                      }`}
                     onClick={(event) => {
                       event.stopPropagation();
                       onModelChange(model.id);
@@ -318,9 +337,8 @@ export const ModelParamsControls = memo(({
       {typeof document !== 'undefined' && renderPanel === 'params' && createPortal(
         <div
           ref={paramsPanelRef}
-          className={`fixed z-[80] transform-gpu transition-all duration-200 ease-out ${
-            isPanelVisible ? 'opacity-100' : 'pointer-events-none opacity-0'
-          }`}
+          className={`fixed z-[80] transform-gpu transition-all duration-200 ease-out ${isPanelVisible ? 'opacity-100' : 'pointer-events-none opacity-0'
+            }`}
           style={buildPanelStyle(paramsPanelAnchor, paramsPanelAlign)}
         >
           <UiPanel className={paramsPanelClassName}>
@@ -332,11 +350,10 @@ export const ModelParamsControls = memo(({
                   return (
                     <button
                       key={item.value}
-                      className={`h-8 rounded-lg text-sm transition-colors ${
-                        active
-                          ? 'bg-surface-dark text-text-dark'
-                          : 'text-text-muted hover:bg-bg-dark'
-                      }`}
+                      className={`h-8 rounded-lg text-sm transition-colors ${active
+                        ? 'bg-surface-dark text-text-dark'
+                        : 'text-text-muted hover:bg-bg-dark'
+                        }`}
                       onClick={(event) => {
                         event.stopPropagation();
                         onResolutionChange(item.value);
@@ -361,11 +378,10 @@ export const ModelParamsControls = memo(({
                   return (
                     <button
                       key={item.value}
-                      className={`rounded-lg px-1 py-1.5 transition-colors ${
-                        active
-                          ? 'bg-surface-dark text-text-dark'
-                          : 'text-text-muted hover:bg-bg-dark'
-                      }`}
+                      className={`rounded-lg px-1 py-1.5 transition-colors ${active
+                        ? 'bg-surface-dark text-text-dark'
+                        : 'text-text-muted hover:bg-bg-dark'
+                        }`}
                       onClick={(event) => {
                         event.stopPropagation();
                         onAspectRatioChange(item.value);
