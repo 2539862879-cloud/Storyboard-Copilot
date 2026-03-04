@@ -1,4 +1,6 @@
 import {
+  type KeyboardEvent as ReactKeyboardEvent,
+  type ReactNode,
   memo,
   useMemo,
   useState,
@@ -6,7 +8,7 @@ import {
   useEffect,
   useRef,
 } from 'react';
-import { Handle, Position } from '@xyflow/react';
+import { Handle, Position, useViewport } from '@xyflow/react';
 import { ArrowUp, Minus, Plus, Sparkles } from 'lucide-react';
 
 import {
@@ -27,6 +29,7 @@ import {
   detectAspectRatio,
   prepareNodeImage,
   parseAspectRatio,
+  resolveImageDisplayUrl,
 } from '@/features/canvas/application/imageData';
 import {
   DEFAULT_IMAGE_MODEL_ID,
@@ -53,10 +56,18 @@ interface AspectRatioChoice {
   label: string;
 }
 
+interface PickerAnchor {
+  left: number;
+  top: number;
+}
+
 const AUTO_ASPECT_RATIO_OPTION: AspectRatioChoice = {
   value: AUTO_REQUEST_ASPECT_RATIO,
   label: '自动',
 };
+const IMAGE_REFERENCE_MARKER_REGEX = /@图(\d+)/g;
+const IMAGE_REFERENCE_HIGHLIGHT_REGEX = /@图\d+/g;
+const PICKER_FALLBACK_ANCHOR: PickerAnchor = { left: 8, top: 8 };
 
 const STORYBOARD_NODE_HORIZONTAL_PADDING_PX = 24;
 const STORYBOARD_GRID_GAP_PX = 2;
@@ -81,6 +92,149 @@ const PARAM_ROW_HEIGHT_PX = 20;
 const NODE_VERTICAL_PADDING_PX = 24;
 const FRAME_CELL_MIN_WIDTH_PX = 24;
 const FRAME_CELL_MIN_HEIGHT_PX = 16;
+
+function getTextareaCaretOffset(
+  textarea: HTMLTextAreaElement,
+  caretIndex: number
+): PickerAnchor {
+  const mirror = document.createElement('div');
+  const computed = window.getComputedStyle(textarea);
+  const mirrorStyle = mirror.style;
+
+  mirrorStyle.position = 'absolute';
+  mirrorStyle.visibility = 'hidden';
+  mirrorStyle.pointerEvents = 'none';
+  mirrorStyle.whiteSpace = 'pre-wrap';
+  mirrorStyle.overflowWrap = 'break-word';
+  mirrorStyle.wordBreak = 'break-word';
+  mirrorStyle.boxSizing = computed.boxSizing;
+  mirrorStyle.width = `${textarea.clientWidth}px`;
+  mirrorStyle.font = computed.font;
+  mirrorStyle.lineHeight = computed.lineHeight;
+  mirrorStyle.letterSpacing = computed.letterSpacing;
+  mirrorStyle.padding = computed.padding;
+  mirrorStyle.border = computed.border;
+  mirrorStyle.textTransform = computed.textTransform;
+  mirrorStyle.textIndent = computed.textIndent;
+
+  mirror.textContent = textarea.value.slice(0, caretIndex);
+
+  const marker = document.createElement('span');
+  marker.textContent = textarea.value.slice(caretIndex, caretIndex + 1) || ' ';
+  mirror.appendChild(marker);
+
+  document.body.appendChild(mirror);
+
+  const left = marker.offsetLeft - textarea.scrollLeft;
+  const top = marker.offsetTop - textarea.scrollTop;
+
+  document.body.removeChild(mirror);
+
+  return {
+    left: Math.max(0, left),
+    top: Math.max(0, top),
+  };
+}
+
+function resolvePickerAnchor(
+  container: HTMLDivElement | null,
+  textarea: HTMLTextAreaElement,
+  caretIndex: number,
+  zoom: number
+): PickerAnchor {
+  if (!container) {
+    return PICKER_FALLBACK_ANCHOR;
+  }
+
+  const containerRect = container.getBoundingClientRect();
+  const textareaRect = textarea.getBoundingClientRect();
+  const caretOffset = getTextareaCaretOffset(textarea, caretIndex);
+  const safeZoom = Number.isFinite(zoom) && zoom > 0 ? zoom : 1;
+
+  return {
+    left: Math.max(0, (textareaRect.left - containerRect.left) / safeZoom + caretOffset.left),
+    top: Math.max(0, (textareaRect.top - containerRect.top) / safeZoom + caretOffset.top),
+  };
+}
+
+function resolvePointerAnchor(
+  container: HTMLDivElement | null,
+  clientX: number,
+  clientY: number,
+  zoom: number
+): PickerAnchor {
+  if (!container) {
+    return PICKER_FALLBACK_ANCHOR;
+  }
+
+  const containerRect = container.getBoundingClientRect();
+  const safeZoom = Number.isFinite(zoom) && zoom > 0 ? zoom : 1;
+
+  return {
+    left: Math.max(0, (clientX - containerRect.left) / safeZoom),
+    top: Math.max(0, (clientY - containerRect.top) / safeZoom),
+  };
+}
+
+function resolveReferenceIndexFromDescription(
+  description: string,
+  maxImageCount: number
+): number | null {
+  IMAGE_REFERENCE_MARKER_REGEX.lastIndex = 0;
+  const match = IMAGE_REFERENCE_MARKER_REGEX.exec(description);
+  if (!match) {
+    return null;
+  }
+
+  const rawIndex = Number(match[1]);
+  if (!Number.isFinite(rawIndex)) {
+    return null;
+  }
+
+  const zeroBasedIndex = rawIndex - 1;
+  if (zeroBasedIndex < 0 || zeroBasedIndex >= maxImageCount) {
+    return null;
+  }
+
+  return zeroBasedIndex;
+}
+
+function renderFrameDescriptionWithHighlights(description: string): ReactNode {
+  if (!description) {
+    return ' ';
+  }
+
+  const segments: ReactNode[] = [];
+  let lastIndex = 0;
+  IMAGE_REFERENCE_HIGHLIGHT_REGEX.lastIndex = 0;
+  let match = IMAGE_REFERENCE_HIGHLIGHT_REGEX.exec(description);
+
+  while (match) {
+    const matchStart = match.index;
+    const matchText = match[0];
+
+    if (matchStart > lastIndex) {
+      segments.push(
+        <span key={`plain-${lastIndex}`}>{description.slice(lastIndex, matchStart)}</span>
+      );
+    }
+
+    segments.push(
+      <span key={`ref-${matchStart}`} className="font-semibold text-accent">
+        {matchText}
+      </span>
+    );
+
+    lastIndex = matchStart + matchText.length;
+    match = IMAGE_REFERENCE_HIGHLIGHT_REGEX.exec(description);
+  }
+
+  if (lastIndex < description.length) {
+    segments.push(<span key={`plain-${lastIndex}`}>{description.slice(lastIndex)}</span>);
+  }
+
+  return segments;
+}
 
 type GridStepperControlProps = {
   label: string;
@@ -153,6 +307,7 @@ function toCssAspectRatio(aspectRatio: string): string {
 }
 
 export const StoryboardGenNode = memo(({ id, data, selected, width, height }: StoryboardGenNodeProps) => {
+  const { zoom } = useViewport();
   const setSelectedNode = useCanvasStore((state) => state.setSelectedNode);
   const nodes = useCanvasStore((state) => state.nodes);
   const edges = useCanvasStore((state) => state.edges);
@@ -164,6 +319,15 @@ export const StoryboardGenNode = memo(({ id, data, selected, width, height }: St
 
   const [error, setError] = useState<string | null>(null);
   const rootRef = useRef<HTMLDivElement>(null);
+  const activeFrameTextareaRef = useRef<HTMLTextAreaElement | null>(null);
+  const [showImagePicker, setShowImagePicker] = useState(false);
+  const [pickerFrameIndex, setPickerFrameIndex] = useState<number | null>(null);
+  const [pickerCursor, setPickerCursor] = useState<number | null>(null);
+  const [pickerActiveIndex, setPickerActiveIndex] = useState(0);
+  const [pickerAnchor, setPickerAnchor] = useState<PickerAnchor>(PICKER_FALLBACK_ANCHOR);
+  const lastPointerAnchorRef = useRef<{ frameIndex: number; anchor: PickerAnchor } | null>(null);
+  const frameTextareaRefs = useRef<Record<string, HTMLTextAreaElement | null>>({});
+  const frameHighlightRefs = useRef<Record<string, HTMLDivElement | null>>({});
 
   const nodeData = data as StoryboardGenNodeData;
   const resolvedTitle = useMemo(
@@ -174,6 +338,15 @@ export const StoryboardGenNode = memo(({ id, data, selected, width, height }: St
   const incomingImages = useMemo(
     () => graphImageResolver.collectInputImages(id, nodes, edges),
     [id, nodes, edges]
+  );
+  const incomingImageItems = useMemo(
+    () =>
+      incomingImages.map((imageUrl, index) => ({
+        imageUrl,
+        displayUrl: resolveImageDisplayUrl(imageUrl),
+        label: `图${index + 1}`,
+      })),
+    [incomingImages]
   );
 
   const imageModels = useMemo(() => listImageModels(), []);
@@ -324,6 +497,35 @@ export const StoryboardGenNode = memo(({ id, data, selected, width, height }: St
     updateNodeData,
   ]);
 
+  useEffect(() => {
+    if (incomingImages.length === 0) {
+      setShowImagePicker(false);
+      setPickerFrameIndex(null);
+      setPickerCursor(null);
+      setPickerActiveIndex(0);
+      return;
+    }
+
+    setPickerActiveIndex((previous) => Math.min(previous, incomingImages.length - 1));
+  }, [incomingImages.length]);
+
+  useEffect(() => {
+    const handleOutsidePointerDown = (event: PointerEvent) => {
+      if (rootRef.current?.contains(event.target as Node)) {
+        return;
+      }
+
+      setShowImagePicker(false);
+      setPickerFrameIndex(null);
+      setPickerCursor(null);
+    };
+
+    document.addEventListener('pointerdown', handleOutsidePointerDown, true);
+    return () => {
+      document.removeEventListener('pointerdown', handleOutsidePointerDown, true);
+    };
+  }, []);
+
   // Auto-generate frames when grid changes
   useEffect(() => {
     const currentFrames = nodeData.frames;
@@ -361,13 +563,16 @@ export const StoryboardGenNode = memo(({ id, data, selected, width, height }: St
     parts.push(`生成一张${gridRows}×${gridCols}的${gridRows * gridCols}宫格分镜图`);
 
     frames.forEach((frame, index) => {
-      if (!frame.description.trim()) {
+      const sanitizedDescription = frame.description.replace(/@(?=图\d+)/g, '').trim();
+      if (!sanitizedDescription) {
         return;
       }
 
-      let frameText = `分镜${index + 1}：${frame.description.trim()}`;
-      if (frame.referenceIndex !== null && incomingImages[frame.referenceIndex]) {
-        frameText += `，参考：图${frame.referenceIndex + 1}`;
+      let frameText = `分镜${index + 1}：${sanitizedDescription}`;
+      const referencedImageIndex =
+        frame.referenceIndex ?? resolveReferenceIndexFromDescription(frame.description, incomingImages.length);
+      if (referencedImageIndex !== null && incomingImages[referencedImageIndex]) {
+        frameText += `，参考：图${referencedImageIndex + 1}`;
       }
       parts.push(frameText);
     });
@@ -511,11 +716,117 @@ export const StoryboardGenNode = memo(({ id, data, selected, width, height }: St
       if (!nodeData) {
         return;
       }
+      const referenceIndex = resolveReferenceIndexFromDescription(description, incomingImages.length);
       const newFrames = [...nodeData.frames];
-      newFrames[index] = { ...newFrames[index], description };
+      newFrames[index] = { ...newFrames[index], description, referenceIndex };
       updateNodeData(id, { frames: newFrames });
     },
-    [nodeData, updateNodeData]
+    [incomingImages.length, nodeData, updateNodeData, id]
+  );
+
+  const closeImagePicker = useCallback(() => {
+    setShowImagePicker(false);
+    setPickerFrameIndex(null);
+    setPickerCursor(null);
+    setPickerActiveIndex(0);
+  }, []);
+
+  const syncFrameHighlightScroll = useCallback((frameId: string) => {
+    const textarea = frameTextareaRefs.current[frameId];
+    const highlight = frameHighlightRefs.current[frameId];
+    if (!textarea || !highlight) {
+      return;
+    }
+
+    highlight.scrollTop = textarea.scrollTop;
+    highlight.scrollLeft = textarea.scrollLeft;
+  }, []);
+
+  const insertImageReference = useCallback((imageIndex: number) => {
+    if (!nodeData || pickerFrameIndex === null) {
+      return;
+    }
+
+    const frame = nodeData.frames[pickerFrameIndex];
+    if (!frame) {
+      closeImagePicker();
+      return;
+    }
+
+    const marker = `@图${imageIndex + 1}`;
+    const cursor = pickerCursor ?? frame.description.length;
+    const nextDescription = `${frame.description.slice(0, cursor)}${marker}${frame.description.slice(cursor)}`;
+    const nextFrames = [...nodeData.frames];
+    nextFrames[pickerFrameIndex] = {
+      ...frame,
+      description: nextDescription,
+      referenceIndex: imageIndex,
+    };
+    updateNodeData(id, { frames: nextFrames });
+    closeImagePicker();
+
+    const nextCursor = cursor + marker.length;
+    requestAnimationFrame(() => {
+      activeFrameTextareaRef.current?.focus();
+      activeFrameTextareaRef.current?.setSelectionRange(nextCursor, nextCursor);
+    });
+  }, [closeImagePicker, id, nodeData, pickerCursor, pickerFrameIndex, updateNodeData]);
+
+  const handleFrameDescriptionKeyDown = useCallback(
+    (index: number, event: ReactKeyboardEvent<HTMLTextAreaElement>) => {
+      if (showImagePicker && incomingImages.length > 0 && pickerFrameIndex === index) {
+        if (event.key === 'ArrowDown') {
+          event.preventDefault();
+          setPickerActiveIndex((previous) => (previous + 1) % incomingImages.length);
+          return;
+        }
+
+        if (event.key === 'ArrowUp') {
+          event.preventDefault();
+          setPickerActiveIndex((previous) =>
+            previous === 0 ? incomingImages.length - 1 : previous - 1
+          );
+          return;
+        }
+
+        if (event.key === 'Enter') {
+          event.preventDefault();
+          insertImageReference(pickerActiveIndex);
+          return;
+        }
+      }
+
+      if (event.key === '@' && incomingImages.length > 0) {
+        event.preventDefault();
+        const cursor = event.currentTarget.selectionStart ?? event.currentTarget.value.length;
+        const pointerAnchor = lastPointerAnchorRef.current;
+        if (pointerAnchor && pointerAnchor.frameIndex === index) {
+          setPickerAnchor(pointerAnchor.anchor);
+        } else {
+          setPickerAnchor(resolvePickerAnchor(rootRef.current, event.currentTarget, cursor, zoom));
+        }
+        setPickerFrameIndex(index);
+        setPickerCursor(cursor);
+        setPickerActiveIndex(0);
+        setShowImagePicker(true);
+        activeFrameTextareaRef.current = event.currentTarget;
+        return;
+      }
+
+      if (event.key === 'Escape' && showImagePicker) {
+        event.preventDefault();
+        closeImagePicker();
+      }
+    },
+    [
+      closeImagePicker,
+      incomingImages.length,
+      insertImageReference,
+      pickerActiveIndex,
+      pickerFrameIndex,
+      showImagePicker,
+      zoom,
+    ]
   );
 
   if (!nodeData) {
@@ -587,17 +898,77 @@ export const StoryboardGenNode = memo(({ id, data, selected, width, height }: St
               className="relative overflow-hidden rounded border border-[rgba(255,255,255,0.06)] bg-bg-dark/40"
               style={{ aspectRatio: frameLayout.cellAspectRatio }}
             >
+              <div
+                ref={(element) => {
+                  frameHighlightRefs.current[frame.id] = element;
+                }}
+                aria-hidden="true"
+                className="pointer-events-none absolute inset-0 overflow-auto text-[10px] leading-4 text-text-dark [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+              >
+                <div className="min-h-full whitespace-pre-wrap break-words px-1.5 py-1 text-left">
+                  {renderFrameDescriptionWithHighlights(frame.description)}
+                </div>
+              </div>
               <textarea
+                ref={(element) => {
+                  frameTextareaRefs.current[frame.id] = element;
+                }}
                 value={frame.description}
                 onChange={(e) => handleFrameDescriptionChange(index, e.target.value)}
+                onKeyDown={(event) => handleFrameDescriptionKeyDown(index, event)}
+                onScroll={() => syncFrameHighlightScroll(frame.id)}
+                onPointerDown={(event) => {
+                  lastPointerAnchorRef.current = {
+                    frameIndex: index,
+                    anchor: resolvePointerAnchor(rootRef.current, event.clientX, event.clientY, zoom),
+                  };
+                }}
+                onFocus={(event) => {
+                  activeFrameTextareaRef.current = event.currentTarget;
+                  syncFrameHighlightScroll(frame.id);
+                }}
                 placeholder="..."
                 wrap="soft"
-                className="ui-scrollbar nodrag nowheel absolute inset-0 h-full w-full resize-none overflow-y-auto overflow-x-hidden bg-transparent px-1.5 py-1 text-left text-[10px] leading-4 text-text-dark placeholder:text-text-muted/40 focus:border-accent/50 focus:outline-none whitespace-pre-wrap break-words"
+                className="ui-scrollbar nodrag nowheel relative z-10 h-full w-full resize-none overflow-y-auto overflow-x-hidden bg-transparent px-1.5 py-1 text-left text-[10px] leading-4 text-transparent caret-text-dark placeholder:text-text-muted/40 focus:border-accent/50 focus:outline-none whitespace-pre-wrap break-words"
               />
             </div>
           ))}
         </div>
       </div>
+
+      {showImagePicker && incomingImageItems.length > 0 && (
+        <div
+          className="absolute z-30 w-[120px] overflow-hidden rounded-xl border border-[rgba(255,255,255,0.16)] bg-surface-dark shadow-xl"
+          style={{ left: pickerAnchor.left, top: pickerAnchor.top }}
+          onMouseDown={(event) => event.stopPropagation()}
+        >
+          <div className="ui-scrollbar max-h-[180px] overflow-y-auto">
+            {incomingImageItems.map((item, imageIndex) => (
+              <button
+                key={`${item.imageUrl}-${imageIndex}`}
+                type="button"
+                onClick={(event) => {
+                  event.stopPropagation();
+                  insertImageReference(imageIndex);
+                }}
+                onMouseEnter={() => setPickerActiveIndex(imageIndex)}
+                className={`flex w-full items-center gap-2 border border-transparent bg-bg-dark/70 px-2 py-2 text-left text-sm text-text-dark transition-colors hover:border-[rgba(255,255,255,0.18)] ${
+                  pickerActiveIndex === imageIndex
+                    ? 'border-[rgba(255,255,255,0.24)] bg-bg-dark'
+                    : ''
+                }`}
+              >
+                <img
+                  src={item.displayUrl}
+                  alt={item.label}
+                  className="h-8 w-8 rounded object-cover"
+                />
+                <span>{item.label}</span>
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
 
       {error && <div className="mb-1.5 shrink-0 text-[10px] text-red-400">{error}</div>}
 
