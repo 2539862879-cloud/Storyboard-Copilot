@@ -11,10 +11,16 @@ import { Handle, Position, useViewport, type NodeProps } from '@xyflow/react';
 import { Upload } from 'lucide-react';
 
 import {
+  CANVAS_NODE_TYPES,
   DEFAULT_ASPECT_RATIO,
   type UploadImageNodeData,
 } from '@/features/canvas/domain/canvasNodes';
+import {
+  isNodeUsingDefaultDisplayName,
+  resolveNodeDisplayName,
+} from '@/features/canvas/domain/nodeDisplay';
 import { canvasEventBus } from '@/features/canvas/application/canvasServices';
+import { NodeHeader, NODE_HEADER_FLOATING_POSITION_CLASS } from '@/features/canvas/ui/NodeHeader';
 import {
   prepareNodeImage,
   readFileAsDataUrl,
@@ -22,6 +28,7 @@ import {
   shouldUseOriginalImageByZoom,
 } from '@/features/canvas/application/imageData';
 import { useCanvasStore } from '@/stores/canvasStore';
+import { useSettingsStore } from '@/stores/settingsStore';
 
 type UploadNodeProps = NodeProps & {
   id: string;
@@ -37,8 +44,21 @@ function toCssAspectRatio(aspectRatio: string): string {
 export const UploadNode = memo(({ id, data, selected }: UploadNodeProps) => {
   const setSelectedNode = useCanvasStore((state) => state.setSelectedNode);
   const updateNodeData = useCanvasStore((state) => state.updateNodeData);
+  const useUploadFilenameAsNodeTitle = useSettingsStore((state) => state.useUploadFilenameAsNodeTitle);
   const { zoom } = useViewport();
   const inputRef = useRef<HTMLInputElement>(null);
+  const resolvedTitle = useMemo(() => {
+    const sourceFileName = typeof data.sourceFileName === 'string' ? data.sourceFileName.trim() : '';
+    if (
+      useUploadFilenameAsNodeTitle
+      && sourceFileName
+      && isNodeUsingDefaultDisplayName(CANVAS_NODE_TYPES.upload, data)
+    ) {
+      return sourceFileName;
+    }
+
+    return resolveNodeDisplayName(CANVAS_NODE_TYPES.upload, data);
+  }, [data, useUploadFilenameAsNodeTitle]);
 
   const processFile = useCallback(
     async (file: File) => {
@@ -50,13 +70,18 @@ export const UploadNode = memo(({ id, data, selected }: UploadNodeProps) => {
           : await readFileAsDataUrl(file);
 
       const prepared = await prepareNodeImage(source);
-      updateNodeData(id, {
+      const nextData: Partial<UploadImageNodeData> = {
         imageUrl: prepared.imageUrl,
         previewImageUrl: prepared.previewImageUrl,
         aspectRatio: prepared.aspectRatio || DEFAULT_ASPECT_RATIO,
-      });
+        sourceFileName: file.name,
+      };
+      if (useUploadFilenameAsNodeTitle) {
+        nextData.displayName = file.name;
+      }
+      updateNodeData(id, nextData);
     },
-    [id, updateNodeData]
+    [id, updateNodeData, useUploadFilenameAsNodeTitle]
   );
 
   const handleDrop = useCallback(
@@ -112,13 +137,21 @@ export const UploadNode = memo(({ id, data, selected }: UploadNodeProps) => {
   return (
     <div
       className={`
-        w-[220px] rounded-[var(--node-radius)] border bg-surface-dark/85 p-0 transition-all duration-150
+        relative overflow-visible w-[220px] rounded-[var(--node-radius)] border bg-surface-dark/85 p-0 transition-all duration-150
         ${selected
           ? 'border-accent shadow-[0_0_0_1px_rgba(59,130,246,0.32)]'
           : 'border-[rgba(255,255,255,0.22)] hover:border-[rgba(255,255,255,0.34)]'}
       `}
       onClick={handleNodeClick}
     >
+      <NodeHeader
+        className={NODE_HEADER_FLOATING_POSITION_CLASS}
+        icon={<Upload className="h-4 w-4" />}
+        titleText={resolvedTitle}
+        editable
+        onTitleChange={(nextTitle) => updateNodeData(id, { displayName: nextTitle })}
+      />
+
       {data.imageUrl ? (
         <div
           className="block inset-0 overflow-hidden rounded-[var(--node-radius)] bg-bg-dark"

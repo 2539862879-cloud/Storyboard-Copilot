@@ -383,9 +383,36 @@ export function Canvas() {
     scheduleCanvasPersist,
   ]);
 
-  const handlePaneClick = useCallback(() => {
+  const openNodeMenuAtClientPosition = useCallback((clientX: number, clientY: number) => {
+    const containerRect = wrapperRef.current?.getBoundingClientRect();
+    if (!containerRect) {
+      return;
+    }
+
+    const flowPos = reactFlowInstance.screenToFlowPosition({
+      x: clientX,
+      y: clientY,
+    });
+
+    setFlowPosition(flowPos);
+    setMenuPosition({
+      x: clientX - containerRect.left,
+      y: clientY - containerRect.top,
+    });
+    setMenuAllowedTypes(undefined);
+    setPendingConnectStart(null);
+    setPreviewConnectionVisual(null);
+    setShowNodeMenu(true);
+  }, [reactFlowInstance]);
+
+  const handlePaneClick = useCallback((event: ReactMouseEvent) => {
     if (suppressNextPaneClickRef.current) {
       suppressNextPaneClickRef.current = false;
+      return;
+    }
+
+    if (event.detail >= 2) {
+      openNodeMenuAtClientPosition(event.clientX, event.clientY);
       return;
     }
 
@@ -394,7 +421,7 @@ export function Canvas() {
     setMenuAllowedTypes(undefined);
     setPendingConnectStart(null);
     setPreviewConnectionVisual(null);
-  }, [setSelectedNode]);
+  }, [openNodeMenuAtClientPosition, setSelectedNode]);
 
   const handleNodeSelect = useCallback(
     (type: CanvasNodeType) => {
@@ -431,31 +458,6 @@ export function Canvas() {
       scheduleCanvasPersist,
       setPreviewConnectionVisual,
     ]
-  );
-
-  const handleDoubleClick = useCallback(
-    (event: ReactMouseEvent) => {
-      const containerRect = wrapperRef.current?.getBoundingClientRect();
-      if (!containerRect) {
-        return;
-      }
-
-      const flowPos = reactFlowInstance.screenToFlowPosition({
-        x: event.clientX,
-        y: event.clientY,
-      });
-
-      setFlowPosition(flowPos);
-      setMenuPosition({
-        x: event.clientX - containerRect.left,
-        y: event.clientY - containerRect.top,
-      });
-      setMenuAllowedTypes(undefined);
-      setPendingConnectStart(null);
-      setPreviewConnectionVisual(null);
-      setShowNodeMenu(true);
-    },
-    [reactFlowInstance]
   );
 
   const handleConnectStart = useCallback(
@@ -582,7 +584,6 @@ export function Canvas() {
         onConnectStart={handleConnectStart}
         onConnectEnd={handleConnectEnd}
         onPaneClick={handlePaneClick}
-        onDoubleClick={handleDoubleClick}
         onMoveStart={handleMoveStart}
         onMoveEnd={handleMoveEnd}
         nodeTypes={nodeTypes}

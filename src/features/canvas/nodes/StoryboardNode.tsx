@@ -21,7 +21,13 @@ import type {
   StoryboardFrameItem,
   StoryboardSplitNodeData,
 } from '@/features/canvas/domain/canvasNodes';
-import { isExportImageNode, isImageEditNode, isUploadNode } from '@/features/canvas/domain/canvasNodes';
+import {
+  CANVAS_NODE_TYPES,
+  isExportImageNode,
+  isImageEditNode,
+  isUploadNode,
+} from '@/features/canvas/domain/canvasNodes';
+import { EXPORT_RESULT_DISPLAY_NAME, resolveNodeDisplayName } from '@/features/canvas/domain/nodeDisplay';
 import {
   canvasToDataUrl,
   loadImageElement,
@@ -398,6 +404,10 @@ export const StoryboardNode = memo(({ id, data, selected }: StoryboardNodeProps)
   const gridCols = Math.max(1, data.gridCols);
   const gridRows = Math.max(1, data.gridRows);
   const totalFrames = orderedFrames.length;
+  const resolvedTitle = useMemo(
+    () => resolveNodeDisplayName(CANVAS_NODE_TYPES.storyboardSplit, data),
+    [data]
+  );
 
   const gridMetrics = useMemo(() => {
     const contentWidth = STORYBOARD_NODE_WIDTH_PX - 16;
@@ -560,7 +570,11 @@ export const StoryboardNode = memo(({ id, data, selected }: StoryboardNodeProps)
           id,
           prepared.imageUrl,
           prepared.aspectRatio,
-          prepared.previewImageUrl
+          prepared.previewImageUrl,
+          {
+            defaultTitle: EXPORT_RESULT_DISPLAY_NAME.storyboardFrameEdit,
+            resultKind: 'storyboardFrameEdit',
+          }
         );
 
         if (createdNodeId) {
@@ -700,7 +714,11 @@ export const StoryboardNode = memo(({ id, data, selected }: StoryboardNodeProps)
         id,
         finalImagePath,
         aspectRatio,
-        finalPreviewPath
+        finalPreviewPath,
+        {
+          defaultTitle: EXPORT_RESULT_DISPLAY_NAME.storyboardSplitExport,
+          resultKind: 'storyboardSplitExport',
+        }
       );
       console.info(`${EXPORT_TRACE_PREFIX} derived-node-created`, {
         traceId,
@@ -773,10 +791,12 @@ export const StoryboardNode = memo(({ id, data, selected }: StoryboardNodeProps)
       <NodeHeader
         className={NODE_HEADER_FLOATING_POSITION_CLASS}
         icon={<SplitResultIcon className="h-3.5 w-3.5" />}
-        titleText="切割结果"
+        titleText={resolvedTitle}
         headerAdjust={STORYBOARD_SPLIT_HEADER_ADJUST}
         iconAdjust={STORYBOARD_SPLIT_ICON_ADJUST}
         titleAdjust={STORYBOARD_SPLIT_TITLE_ADJUST}
+        editable
+        onTitleChange={(nextTitle) => updateNodeData(id, { displayName: nextTitle })}
       />
 
       <div className="mb-1.5 flex items-start justify-between gap-2">

@@ -17,6 +17,7 @@ import {
   type CanvasNode,
   type CanvasNodeData,
   type CanvasNodeType,
+  type ExportImageNodeResultKind,
   type NodeToolType,
   type StoryboardExportOptions,
   type StoryboardFrameItem,
@@ -26,6 +27,7 @@ import {
   nodeHasSourceHandle,
   nodeHasTargetHandle,
 } from '@/features/canvas/domain/nodeRegistry';
+import { EXPORT_RESULT_DISPLAY_NAME } from '@/features/canvas/domain/nodeDisplay';
 import { nodeCatalog } from '@/features/canvas/application/nodeCatalog';
 import { canvasNodeFactory } from '@/features/canvas/application/canvasServices';
 
@@ -81,7 +83,11 @@ interface CanvasState {
     sourceNodeId: string,
     imageUrl: string,
     aspectRatio: string,
-    previewImageUrl?: string
+    previewImageUrl?: string,
+    options?: {
+      defaultTitle?: string;
+      resultKind?: ExportImageNodeResultKind;
+    }
   ) => string | null;
   addStoryboardSplitNode: (
     sourceNodeId: string,
@@ -604,13 +610,26 @@ export const useCanvasStore = create<CanvasState>((set, get) => ({
     return node.id;
   },
 
-  addDerivedExportNode: (sourceNodeId, imageUrl, aspectRatio, previewImageUrl) => {
+  addDerivedExportNode: (sourceNodeId, imageUrl, aspectRatio, previewImageUrl, options) => {
     const state = get();
     const position = state.findNodePosition(sourceNodeId, 220, 180);
-    const node = canvasNodeFactory.createNode(CANVAS_NODE_TYPES.exportImage, position, {
+    const exportNodeData: Partial<CanvasNodeData> = {
       imageUrl,
       previewImageUrl: previewImageUrl ?? null,
       aspectRatio,
+    };
+    if (options?.defaultTitle) {
+      (exportNodeData as { displayName?: string }).displayName = options.defaultTitle;
+    }
+    if (options?.resultKind) {
+      (exportNodeData as { resultKind?: ExportImageNodeResultKind }).resultKind = options.resultKind;
+      if (!options.defaultTitle) {
+        (exportNodeData as { displayName?: string }).displayName =
+          EXPORT_RESULT_DISPLAY_NAME[options.resultKind];
+      }
+    }
+    const node = canvasNodeFactory.createNode(CANVAS_NODE_TYPES.exportImage, position, {
+      ...exportNodeData,
     });
 
     set({
@@ -920,10 +939,14 @@ export const useCanvasStore = create<CanvasState>((set, get) => ({
     );
 
     const existingGroupCount = state.nodes.filter((node) => node.type === CANVAS_NODE_TYPES.group).length;
+    const groupDisplayName = `组 ${existingGroupCount + 1}`;
     const groupNode = canvasNodeFactory.createNode(
       CANVAS_NODE_TYPES.group,
       { x: groupX, y: groupY },
-      { label: `组 ${existingGroupCount + 1}` }
+      {
+        label: groupDisplayName,
+        displayName: groupDisplayName,
+      }
     );
     groupNode.style = { width: groupWidth, height: groupHeight };
     groupNode.selected = true;

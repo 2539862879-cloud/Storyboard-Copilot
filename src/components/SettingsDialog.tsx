@@ -3,6 +3,7 @@ import { X, Eye, EyeOff, FolderOpen, Plus, Trash2 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { open } from '@tauri-apps/plugin-dialog';
 import { useSettingsStore } from '@/stores/settingsStore';
+import { UiCheckbox } from '@/components/ui';
 
 interface SettingsDialogProps {
   isOpen: boolean;
@@ -16,13 +17,18 @@ export function SettingsDialog({ isOpen, onClose }: SettingsDialogProps) {
   const {
     apiKey,
     downloadPresetPaths,
+    useUploadFilenameAsNodeTitle,
     setApiKey,
     setDownloadPresetPaths,
+    setUseUploadFilenameAsNodeTitle,
   } = useSettingsStore();
   const [activeCategory, setActiveCategory] = useState<SettingsCategory>('providers');
   const [localApiKey, setLocalApiKey] = useState(apiKey);
   const [localDownloadPathInput, setLocalDownloadPathInput] = useState('');
   const [localDownloadPresetPaths, setLocalDownloadPresetPaths] = useState(downloadPresetPaths);
+  const [localUseUploadFilenameAsNodeTitle, setLocalUseUploadFilenameAsNodeTitle] = useState(
+    useUploadFilenameAsNodeTitle
+  );
   const [showApiKey, setShowApiKey] = useState(false);
 
   useEffect(() => {
@@ -31,14 +37,24 @@ export function SettingsDialog({ isOpen, onClose }: SettingsDialogProps) {
     }
     setLocalApiKey(apiKey);
     setLocalDownloadPresetPaths(downloadPresetPaths);
+    setLocalUseUploadFilenameAsNodeTitle(useUploadFilenameAsNodeTitle);
     setLocalDownloadPathInput('');
-  }, [apiKey, downloadPresetPaths, isOpen]);
+  }, [apiKey, downloadPresetPaths, isOpen, useUploadFilenameAsNodeTitle]);
 
   const handleSave = useCallback(() => {
     setApiKey(localApiKey);
     setDownloadPresetPaths(localDownloadPresetPaths);
+    setUseUploadFilenameAsNodeTitle(localUseUploadFilenameAsNodeTitle);
     onClose();
-  }, [localApiKey, localDownloadPresetPaths, setApiKey, setDownloadPresetPaths, onClose]);
+  }, [
+    localApiKey,
+    localDownloadPresetPaths,
+    localUseUploadFilenameAsNodeTitle,
+    setApiKey,
+    setDownloadPresetPaths,
+    setUseUploadFilenameAsNodeTitle,
+    onClose,
+  ]);
 
   const handlePickDownloadPath = useCallback(async () => {
     try {
@@ -241,6 +257,24 @@ export function SettingsDialog({ isOpen, onClose }: SettingsDialogProps) {
               </div>
 
               <div className="ui-scrollbar flex-1 space-y-4 overflow-y-auto p-6">
+                <div className="rounded-lg border border-border-dark bg-bg-dark p-4">
+                  <div className="flex items-start gap-3">
+                    <UiCheckbox
+                      checked={localUseUploadFilenameAsNodeTitle}
+                      onCheckedChange={(checked) => setLocalUseUploadFilenameAsNodeTitle(checked)}
+                      className="mt-0.5"
+                    />
+                    <div>
+                      <h3 className="text-sm font-medium text-text-dark">
+                        {t('settings.useUploadFilenameAsNodeTitle')}
+                      </h3>
+                      <p className="mt-1 text-xs text-text-muted">
+                        {t('settings.useUploadFilenameAsNodeTitleDesc')}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
                 <div className="rounded-lg border border-border-dark bg-bg-dark p-4">
                   <div className="mb-3">
                     <h3 className="text-sm font-medium text-text-dark">

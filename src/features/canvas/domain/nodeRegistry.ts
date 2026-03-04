@@ -13,6 +13,7 @@ import {
   type TextAnnotationNodeData,
   type UploadImageNodeData,
 } from './canvasNodes';
+import { DEFAULT_NODE_DISPLAY_NAME } from './nodeDisplay';
 import { DEFAULT_IMAGE_MODEL_ID } from '../models';
 
 export type MenuIconKey = 'upload' | 'sparkles' | 'layout' | 'text';
@@ -59,9 +60,11 @@ const uploadNodeDefinition: CanvasNodeDefinition<UploadImageNodeData> = {
     },
   },
   createDefaultData: () => ({
+    displayName: DEFAULT_NODE_DISPLAY_NAME[CANVAS_NODE_TYPES.upload],
     imageUrl: null,
     previewImageUrl: null,
     aspectRatio: DEFAULT_ASPECT_RATIO,
+    sourceFileName: null,
   }),
 };
 
@@ -83,6 +86,7 @@ const imageEditNodeDefinition: CanvasNodeDefinition<ImageEditNodeData> = {
     },
   },
   createDefaultData: () => ({
+    displayName: DEFAULT_NODE_DISPLAY_NAME[CANVAS_NODE_TYPES.imageEdit],
     imageUrl: null,
     previewImageUrl: null,
     aspectRatio: DEFAULT_ASPECT_RATIO,
@@ -114,9 +118,11 @@ const exportImageNodeDefinition: CanvasNodeDefinition<ExportImageNodeData> = {
     },
   },
   createDefaultData: () => ({
+    displayName: DEFAULT_NODE_DISPLAY_NAME[CANVAS_NODE_TYPES.exportImage],
     imageUrl: null,
     previewImageUrl: null,
     aspectRatio: DEFAULT_ASPECT_RATIO,
+    resultKind: 'generic',
   }),
 };
 
@@ -138,6 +144,7 @@ const groupNodeDefinition: CanvasNodeDefinition<GroupNodeData> = {
     },
   },
   createDefaultData: () => ({
+    displayName: DEFAULT_NODE_DISPLAY_NAME[CANVAS_NODE_TYPES.group],
     label: '组',
   }),
 };
@@ -160,6 +167,7 @@ const textAnnotationNodeDefinition: CanvasNodeDefinition<TextAnnotationNodeData>
     },
   },
   createDefaultData: () => ({
+    displayName: DEFAULT_NODE_DISPLAY_NAME[CANVAS_NODE_TYPES.textAnnotation],
     content: '',
   }),
 };
@@ -182,6 +190,7 @@ const storyboardSplitDefinition: CanvasNodeDefinition<StoryboardSplitNodeData> =
     },
   },
   createDefaultData: () => ({
+    displayName: DEFAULT_NODE_DISPLAY_NAME[CANVAS_NODE_TYPES.storyboardSplit],
     aspectRatio: DEFAULT_ASPECT_RATIO,
     frameAspectRatio: DEFAULT_ASPECT_RATIO,
     gridRows: 2,
@@ -220,6 +229,7 @@ const storyboardGenNodeDefinition: CanvasNodeDefinition<StoryboardGenNodeData> =
     },
   },
   createDefaultData: () => ({
+    displayName: DEFAULT_NODE_DISPLAY_NAME[CANVAS_NODE_TYPES.storyboardGen],
     gridRows: 2,
     gridCols: 2,
     frames: [],

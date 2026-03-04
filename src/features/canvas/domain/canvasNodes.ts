@@ -28,21 +28,38 @@ export const IMAGE_ASPECT_RATIOS = [
 
 export type ImageSize = (typeof IMAGE_SIZES)[number];
 
-export interface NodeImageData {
+export interface NodeDisplayData {
+  displayName?: string;
+  [key: string]: unknown;
+}
+
+export interface NodeImageData extends NodeDisplayData {
   imageUrl: string | null;
   previewImageUrl?: string | null;
   aspectRatio: string;
   [key: string]: unknown;
 }
 
-export interface UploadImageNodeData extends NodeImageData {}
-export interface ExportImageNodeData extends NodeImageData {}
-export interface GroupNodeData {
+export interface UploadImageNodeData extends NodeImageData {
+  sourceFileName?: string | null;
+}
+
+export type ExportImageNodeResultKind =
+  | 'generic'
+  | 'storyboardGenOutput'
+  | 'storyboardSplitExport'
+  | 'storyboardFrameEdit';
+
+export interface ExportImageNodeData extends NodeImageData {
+  resultKind?: ExportImageNodeResultKind;
+}
+
+export interface GroupNodeData extends NodeDisplayData {
   label: string;
   [key: string]: unknown;
 }
 
-export interface TextAnnotationNodeData {
+export interface TextAnnotationNodeData extends NodeDisplayData {
   content: string;
   [key: string]: unknown;
 }
@@ -80,6 +97,7 @@ export interface StoryboardExportOptions {
 }
 
 export interface StoryboardSplitNodeData {
+  displayName?: string;
   aspectRatio: string;
   frameAspectRatio?: string;
   gridRows: number;
@@ -96,6 +114,7 @@ export interface StoryboardGenFrameItem {
 }
 
 export interface StoryboardGenNodeData {
+  displayName?: string;
   gridRows: number;
   gridCols: number;
   frames: StoryboardGenFrameItem[];

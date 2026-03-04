@@ -1,4 +1,12 @@
-import type { CSSProperties, ReactNode } from 'react';
+import {
+  type CSSProperties,
+  type ReactNode,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
 
 type HeaderAdjust = {
   x?: number;
@@ -24,6 +32,8 @@ type NodeHeaderProps = {
   headerAdjust?: HeaderAdjust;
   iconAdjust?: HeaderAdjust;
   titleAdjust?: HeaderAdjust;
+  editable?: boolean;
+  onTitleChange?: (value: string) => void;
 };
 
 export const NODE_HEADER_TONE_CLASS = 'text-white/55';
@@ -54,6 +64,10 @@ function joinClasses(...classes: Array<string | undefined>): string {
   return classes.filter(Boolean).join(' ');
 }
 
+function sanitizeTitle(value: string | undefined): string {
+  return typeof value === 'string' ? value.trim() : '';
+}
+
 export function NodeHeader({
   icon,
   titleText,
@@ -72,11 +86,119 @@ export function NodeHeader({
   headerAdjust,
   iconAdjust,
   titleAdjust,
+  editable = false,
+  onTitleChange,
 }: NodeHeaderProps) {
   const tone = toneClassName ?? NODE_HEADER_TONE_CLASS;
-  const resolvedTitle = titleText
-    ? <span className={joinClasses(NODE_HEADER_TITLE_CLASS, tone, titleClassName)}>{titleText}</span>
-    : title;
+  const canEditTitle = editable && typeof titleText === 'string' && typeof onTitleChange === 'function';
+  const inputRef = useRef<HTMLInputElement | null>(null);
+  const [isEditingTitle, setIsEditingTitle] = useState(false);
+  const [draftTitle, setDraftTitle] = useState(() => sanitizeTitle(titleText));
+
+  useEffect(() => {
+    if (isEditingTitle) {
+      return;
+    }
+    setDraftTitle(sanitizeTitle(titleText));
+  }, [isEditingTitle, titleText]);
+
+  useEffect(() => {
+    if (!isEditingTitle) {
+      return;
+    }
+    inputRef.current?.focus();
+    inputRef.current?.select();
+  }, [isEditingTitle]);
+
+  const commitTitle = useCallback(() => {
+    if (!canEditTitle || !onTitleChange) {
+      setIsEditingTitle(false);
+      return;
+    }
+
+    const fallbackTitle = sanitizeTitle(titleText);
+    const nextTitle = sanitizeTitle(draftTitle) || fallbackTitle;
+
+    if (nextTitle && nextTitle !== fallbackTitle) {
+      onTitleChange(nextTitle);
+    }
+
+    setDraftTitle(nextTitle || fallbackTitle);
+    setIsEditingTitle(false);
+  }, [canEditTitle, draftTitle, onTitleChange, titleText]);
+
+  const cancelTitleEdit = useCallback(() => {
+    setDraftTitle(sanitizeTitle(titleText));
+    setIsEditingTitle(false);
+  }, [titleText]);
+
+  const resolvedTitle = useMemo(() => {
+    if (!canEditTitle) {
+      if (titleText) {
+        return <span className={joinClasses(NODE_HEADER_TITLE_CLASS, tone, titleClassName)}>{titleText}</span>;
+      }
+      return title;
+    }
+
+    if (isEditingTitle) {
+      return (
+        <input
+          ref={inputRef}
+          value={draftTitle}
+          onChange={(event) => setDraftTitle(event.target.value)}
+          onBlur={commitTitle}
+          onPointerDown={(event) => event.stopPropagation()}
+          onClick={(event) => event.stopPropagation()}
+          onDoubleClick={(event) => event.stopPropagation()}
+          onKeyDown={(event) => {
+            if (event.key === 'Enter') {
+              event.preventDefault();
+              commitTitle();
+              return;
+            }
+            if (event.key === 'Escape') {
+              event.preventDefault();
+              cancelTitleEdit();
+            }
+          }}
+          className={joinClasses(
+            'nodrag nowheel h-6 min-w-[70px] rounded border border-[rgba(255,255,255,0.24)] bg-black/30 px-2 text-[13px] font-normal text-text-dark outline-none focus:border-accent/70',
+            titleClassName
+          )}
+        />
+      );
+    }
+
+    return (
+      <button
+        type="button"
+        className={joinClasses(
+          'nodrag inline-flex cursor-text items-center rounded px-0 text-left',
+          NODE_HEADER_TITLE_CLASS,
+          tone,
+          titleClassName
+        )}
+        title={titleText}
+        onDoubleClick={(event) => {
+          event.stopPropagation();
+          setIsEditingTitle(true);
+        }}
+      >
+        {titleText}
+      </button>
+    );
+  }, [
+    canEditTitle,
+    cancelTitleEdit,
+    commitTitle,
+    draftTitle,
+    isEditingTitle,
+    title,
+    titleClassName,
+    titleText,
+    tone,
+  ]);
+
   const resolvedMeta = metaText
     ? <span className={joinClasses(NODE_HEADER_META_CLASS, metaClassName)}>{metaText}</span>
     : meta;

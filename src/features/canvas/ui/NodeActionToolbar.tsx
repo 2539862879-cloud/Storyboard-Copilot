@@ -32,6 +32,8 @@ const toolIconMap: Record<ToolIconKey, typeof Crop> = {
   split: Scissors,
 };
 
+const TOOLBAR_BUTTON_RADIUS_CLASS = 'rounded-full';
+
 export const NodeActionToolbar = memo(({ node }: NodeActionToolbarProps) => {
   const tools = useMemo(() => getNodeToolPlugins(node), [node]);
   const deleteNode = useCanvasStore((state) => state.deleteNode);
@@ -123,7 +125,7 @@ export const NodeActionToolbar = memo(({ node }: NodeActionToolbarProps) => {
       isVisible
       position={Position.Top}
       align="center"
-      offset={12}
+      offset={25}
       className="pointer-events-auto"
     >
       <UiPanel className="flex items-center gap-1 rounded-full p-1">
@@ -133,7 +135,7 @@ export const NodeActionToolbar = memo(({ node }: NodeActionToolbarProps) => {
           return (
             <UiChipButton
               key={tool.type}
-              className="h-8 rounded-full px-2.5 text-xs"
+              className={`h-8 ${TOOLBAR_BUTTON_RADIUS_CLASS} px-2.5 text-xs`}
               onClick={() =>
                 canvasEventBus.publish('tool-dialog/open', {
                   nodeId: node.id,
@@ -149,7 +151,7 @@ export const NodeActionToolbar = memo(({ node }: NodeActionToolbarProps) => {
         {canReupload && (
           <UiChipButton
             key="upload-reupload"
-            className="h-8 rounded-full px-2.5 text-xs"
+            className={`h-8 ${TOOLBAR_BUTTON_RADIUS_CLASS} px-2.5 text-xs`}
             onClick={() =>
               canvasEventBus.publish('upload-node/reupload', {
                 nodeId: node.id,
@@ -163,7 +165,7 @@ export const NodeActionToolbar = memo(({ node }: NodeActionToolbarProps) => {
         {canHandleImage && (
           <UiChipButton
             key="image-copy"
-            className="h-8 rounded-full px-2.5 text-xs"
+            className={`h-8 ${TOOLBAR_BUTTON_RADIUS_CLASS} px-2.5 text-xs`}
             onClick={() => {
               void handleCopyImage();
             }}
@@ -175,7 +177,7 @@ export const NodeActionToolbar = memo(({ node }: NodeActionToolbarProps) => {
         {canHandleImage && (
           <UiChipButton
             key="image-download"
-            className="h-8 rounded-full px-2.5 text-xs"
+            className={`h-8 ${TOOLBAR_BUTTON_RADIUS_CLASS} px-2.5 text-xs`}
             onClick={(event) => {
               event.stopPropagation();
               if (downloadPresetPaths.length === 0) {
@@ -195,7 +197,7 @@ export const NodeActionToolbar = memo(({ node }: NodeActionToolbarProps) => {
         {isGroupNode(node) && (
           <UiChipButton
             key="group-ungroup"
-            className="h-8 rounded-full border-amber-500/45 bg-amber-500/15 px-2.5 text-xs text-amber-300 hover:bg-amber-500/25"
+            className={`h-8 ${TOOLBAR_BUTTON_RADIUS_CLASS} border-amber-500/45 bg-amber-500/15 px-2.5 text-xs text-amber-300 hover:bg-amber-500/25`}
             onClick={(event) => {
               event.stopPropagation();
               setDownloadMenu(null);
@@ -208,7 +210,7 @@ export const NodeActionToolbar = memo(({ node }: NodeActionToolbarProps) => {
         )}
         <UiChipButton
           key="node-delete"
-          className="h-8 rounded-full border-red-500/45 bg-red-500/15 px-2.5 text-xs text-red-300 hover:bg-red-500/25"
+          className={`h-8 ${TOOLBAR_BUTTON_RADIUS_CLASS} border-red-500/45 bg-red-500/15 px-2.5 text-xs text-red-300 hover:bg-red-500/25`}
           onClick={(event) => {
             event.stopPropagation();
             setDownloadMenu(null);

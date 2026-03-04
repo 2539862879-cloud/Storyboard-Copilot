@@ -16,6 +16,7 @@ import {
   type ImageSize,
   type StoryboardGenNodeData,
 } from '@/features/canvas/domain/canvasNodes';
+import { EXPORT_RESULT_DISPLAY_NAME, resolveNodeDisplayName } from '@/features/canvas/domain/nodeDisplay';
 import { useCanvasStore } from '@/stores/canvasStore';
 import { useSettingsStore } from '@/stores/settingsStore';
 import {
@@ -110,6 +111,10 @@ export const StoryboardGenNode = memo(({ id, data, selected }: StoryboardGenNode
 
   const nodeData = data as StoryboardGenNodeData;
   const currentNode = nodes.find((n) => n.id === id);
+  const resolvedTitle = useMemo(
+    () => resolveNodeDisplayName(CANVAS_NODE_TYPES.storyboardGen, nodeData),
+    [nodeData]
+  );
 
   const incomingImages = useMemo(
     () => graphImageResolver.collectInputImages(id, nodes, edges),
@@ -348,6 +353,8 @@ export const StoryboardGenNode = memo(({ id, data, selected }: StoryboardGenNode
         isGenerating: true,
         generationStartedAt,
         generationDurationMs,
+        displayName: EXPORT_RESULT_DISPLAY_NAME.storyboardGenOutput,
+        resultKind: 'storyboardGenOutput',
         prompt: '',
         model: selectedModel.id,
         size: selectedResolution.value as ImageSize,
@@ -481,10 +488,12 @@ export const StoryboardGenNode = memo(({ id, data, selected }: StoryboardGenNode
       <NodeHeader
         className={NODE_HEADER_FLOATING_POSITION_CLASS}
         icon={<Sparkles className="h-4 w-4" />}
-        titleText="分镜生成"
+        titleText={resolvedTitle}
         headerAdjust={STORYBOARD_GEN_HEADER_ADJUST}
         iconAdjust={STORYBOARD_GEN_ICON_ADJUST}
         titleAdjust={STORYBOARD_GEN_TITLE_ADJUST}
+        editable
+        onTitleChange={(nextTitle) => updateNodeData(id, { displayName: nextTitle })}
       />
 
       <div className="mb-3 text-xs text-text-muted">{totalFrames} 格</div>

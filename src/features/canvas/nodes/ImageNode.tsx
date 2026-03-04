@@ -1,9 +1,11 @@
 import { memo, useEffect, useMemo, useState } from 'react';
 import { Handle, Position, useViewport, type NodeProps } from '@xyflow/react';
-import { Sparkles } from 'lucide-react';
+import { Image as ImageIcon, Sparkles } from 'lucide-react';
 
 import {
+  CANVAS_NODE_TYPES,
   DEFAULT_ASPECT_RATIO,
+  type CanvasNodeType,
   type ExportImageNodeData,
   type ImageEditNodeData,
 } from '@/features/canvas/domain/canvasNodes';
@@ -11,6 +13,8 @@ import {
   resolveImageDisplayUrl,
   shouldUseOriginalImageByZoom,
 } from '@/features/canvas/application/imageData';
+import { resolveNodeDisplayName } from '@/features/canvas/domain/nodeDisplay';
+import { NodeHeader, NODE_HEADER_FLOATING_POSITION_CLASS } from '@/features/canvas/ui/NodeHeader';
 import { useCanvasStore } from '@/stores/canvasStore';
 
 type ImageNodeProps = NodeProps & {
@@ -24,15 +28,21 @@ function toCssAspectRatio(aspectRatio: string): string {
   return `${width} / ${height}`;
 }
 
-export const ImageNode = memo(({ id, data, selected }: ImageNodeProps) => {
+export const ImageNode = memo(({ id, data, selected, type }: ImageNodeProps) => {
   const setSelectedNode = useCanvasStore((state) => state.setSelectedNode);
+  const updateNodeData = useCanvasStore((state) => state.updateNodeData);
   const { zoom } = useViewport();
   const [now, setNow] = useState(() => Date.now());
+  const isExportResultNode = type === CANVAS_NODE_TYPES.exportImage;
   const isGenerating = typeof data.isGenerating === 'boolean' ? data.isGenerating : false;
   const generationStartedAt =
     typeof data.generationStartedAt === 'number' ? data.generationStartedAt : null;
   const generationDurationMs =
     typeof data.generationDurationMs === 'number' ? data.generationDurationMs : 60000;
+  const resolvedTitle = useMemo(
+    () => resolveNodeDisplayName(type as CanvasNodeType, data),
+    [data, type]
+  );
 
   useEffect(() => {
     if (!isGenerating) {
@@ -71,13 +81,23 @@ export const ImageNode = memo(({ id, data, selected }: ImageNodeProps) => {
   return (
     <div
       className={`
-        w-[220px] rounded-[var(--node-radius)] border bg-surface-dark/85 p-0 transition-all duration-150
+        relative overflow-visible w-[220px] rounded-[var(--node-radius)] border bg-surface-dark/85 p-0 transition-all duration-150
         ${selected
           ? 'border-accent shadow-[0_0_0_1px_rgba(59,130,246,0.32)]'
           : 'border-[rgba(255,255,255,0.22)] hover:border-[rgba(255,255,255,0.34)]'}
       `}
       onClick={() => setSelectedNode(id)}
     >
+      <NodeHeader
+        className={NODE_HEADER_FLOATING_POSITION_CLASS}
+        icon={isExportResultNode
+          ? <ImageIcon className="h-4 w-4" />
+          : <Sparkles className="h-4 w-4" />}
+        titleText={resolvedTitle}
+        editable
+        onTitleChange={(nextTitle) => updateNodeData(id, { displayName: nextTitle })}
+      />
+
       <div
         className="relative inset-0 overflow-hidden rounded-[var(--node-radius)] bg-bg-dark"
         style={{
@@ -87,13 +107,19 @@ export const ImageNode = memo(({ id, data, selected }: ImageNodeProps) => {
         {data.imageUrl ? (
           <img
             src={imageSource ?? ''}
-            alt="Generated"
+            alt={isExportResultNode ? 'Result' : 'Generated'}
             className="h-full w-full object-contain"
           />
         ) : (
           <div className="flex h-full w-full flex-col items-center justify-center gap-2 text-text-muted/85">
-            <Sparkles className="h-7 w-7 opacity-60" />
-            <span className="px-4 text-center text-[12px] leading-6">选中后在下方输入提示词生成或编辑图片</span>
+            {isExportResultNode ? (
+              <ImageIcon className="h-7 w-7 opacity-60" />
+            ) : (
+              <Sparkles className="h-7 w-7 opacity-60" />
+            )}
+            <span className="px-4 text-center text-[12px] leading-6">
+              {isExportResultNode ? '等待输出结果图片' : '选中后在下方输入提示词生成或编辑图片'}
+            </span>
           </div>
         )}
 

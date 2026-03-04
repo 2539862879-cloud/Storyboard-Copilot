@@ -1,6 +1,7 @@
 import { useMemo, useState, useEffect, useCallback } from 'react';
 
 import { isExportImageNode, isImageEditNode, isUploadNode } from '@/features/canvas/domain/canvasNodes';
+import { EXPORT_RESULT_DISPLAY_NAME } from '@/features/canvas/domain/nodeDisplay';
 import {
   canvasEventBus,
   canvasToolProcessor,
@@ -17,7 +18,7 @@ import { SplitStoryboardToolEditor } from './tool-editors/SplitStoryboardToolEdi
 export function NodeToolDialog() {
   const activeToolDialog = useCanvasStore((state) => state.activeToolDialog);
   const nodes = useCanvasStore((state) => state.nodes);
-  const addDerivedUploadNode = useCanvasStore((state) => state.addDerivedUploadNode);
+  const addDerivedExportNode = useCanvasStore((state) => state.addDerivedExportNode);
   const addStoryboardSplitNode = useCanvasStore((state) => state.addStoryboardSplitNode);
 
   const [isProcessing, setIsProcessing] = useState(false);
@@ -94,11 +95,15 @@ export function NodeToolDialog() {
         );
       } else if (result.outputImageUrl) {
         const prepared = await prepareNodeImage(result.outputImageUrl);
-        addDerivedUploadNode(
+        addDerivedExportNode(
           sourceNode.id,
           prepared.imageUrl,
           prepared.aspectRatio,
-          prepared.previewImageUrl
+          prepared.previewImageUrl,
+          {
+            defaultTitle: EXPORT_RESULT_DISPLAY_NAME.generic,
+            resultKind: 'generic',
+          }
         );
       }
 
@@ -115,7 +120,7 @@ export function NodeToolDialog() {
     activePlugin,
     options,
     addStoryboardSplitNode,
-    addDerivedUploadNode,
+    addDerivedExportNode,
     closeDialog,
   ]);
 
