@@ -1,5 +1,5 @@
 import { memo } from 'react';
-import { NodeResizeControl, type NodeProps } from '@xyflow/react';
+import { type NodeProps } from '@xyflow/react';
 import { FileText } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
@@ -8,6 +8,7 @@ import { useTranslation } from 'react-i18next';
 import { CANVAS_NODE_TYPES, type TextAnnotationNodeData } from '@/features/canvas/domain/canvasNodes';
 import { resolveNodeDisplayName } from '@/features/canvas/domain/nodeDisplay';
 import { NodeHeader, NODE_HEADER_FLOATING_POSITION_CLASS } from '@/features/canvas/ui/NodeHeader';
+import { NodeResizeHandle } from '@/features/canvas/ui/NodeResizeHandle';
 import { useCanvasStore } from '@/stores/canvasStore';
 
 type TextAnnotationNodeProps = NodeProps & {
@@ -57,16 +58,12 @@ export const TextAnnotationNode = memo(({
         onTitleChange={(nextTitle) => updateNodeData(id, { displayName: nextTitle })}
       />
 
-      <NodeResizeControl
+      <NodeResizeHandle
         minWidth={MIN_WIDTH}
         minHeight={MIN_HEIGHT}
         maxWidth={MAX_WIDTH}
         maxHeight={MAX_HEIGHT}
-        position="bottom-right"
-        className="!h-3 !w-3 !min-h-0 !min-w-0 !rounded-none !border-0 !bg-transparent !p-0 !opacity-0 transition-opacity duration-100 group-hover:!opacity-100 hover:!opacity-100"
-      >
-        <div className="h-3 w-3 cursor-se-resize border-b border-r border-white/35 transition-colors hover:border-accent" />
-      </NodeResizeControl>
+      />
 
       {selected ? (
         <textarea

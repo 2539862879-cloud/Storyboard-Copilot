@@ -21,6 +21,7 @@ import {
 } from '@/features/canvas/domain/nodeDisplay';
 import { canvasEventBus } from '@/features/canvas/application/canvasServices';
 import { NodeHeader, NODE_HEADER_FLOATING_POSITION_CLASS } from '@/features/canvas/ui/NodeHeader';
+import { NodeResizeHandle } from '@/features/canvas/ui/NodeResizeHandle';
 import {
   prepareNodeImage,
   readFileAsDataUrl,
@@ -36,17 +37,28 @@ type UploadNodeProps = NodeProps & {
   selected?: boolean;
 };
 
-function toCssAspectRatio(aspectRatio: string): string {
-  const [width = '1', height = '1'] = aspectRatio.split(':');
-  return `${width} / ${height}`;
+function toAspectRatioValue(aspectRatio: string): number {
+  const [rawWidth = '1', rawHeight = '1'] = aspectRatio.split(':');
+  const width = Number(rawWidth);
+  const height = Number(rawHeight);
+  if (!Number.isFinite(width) || !Number.isFinite(height) || width <= 0 || height <= 0) {
+    return 1;
+  }
+  return width / height;
 }
 
-export const UploadNode = memo(({ id, data, selected }: UploadNodeProps) => {
+export const UploadNode = memo(({ id, data, selected, width, height }: UploadNodeProps) => {
   const setSelectedNode = useCanvasStore((state) => state.setSelectedNode);
   const updateNodeData = useCanvasStore((state) => state.updateNodeData);
   const useUploadFilenameAsNodeTitle = useSettingsStore((state) => state.useUploadFilenameAsNodeTitle);
   const { zoom } = useViewport();
   const inputRef = useRef<HTMLInputElement>(null);
+  const resolvedAspectRatio = data.aspectRatio || DEFAULT_ASPECT_RATIO;
+  const resolvedWidth = Math.max(160, Math.round(width ?? 220));
+  const resolvedHeight = Math.max(
+    100,
+    Math.round(height ?? (resolvedWidth / toAspectRatioValue(resolvedAspectRatio)))
+  );
   const resolvedTitle = useMemo(() => {
     const sourceFileName = typeof data.sourceFileName === 'string' ? data.sourceFileName.trim() : '';
     if (
@@ -137,11 +149,12 @@ export const UploadNode = memo(({ id, data, selected }: UploadNodeProps) => {
   return (
     <div
       className={`
-        relative overflow-visible w-[220px] rounded-[var(--node-radius)] border bg-surface-dark/85 p-0 transition-all duration-150
+        group relative overflow-visible rounded-[var(--node-radius)] border bg-surface-dark/85 p-0 transition-colors duration-150
         ${selected
           ? 'border-accent shadow-[0_0_0_1px_rgba(59,130,246,0.32)]'
           : 'border-[rgba(255,255,255,0.22)] hover:border-[rgba(255,255,255,0.34)]'}
       `}
+      style={{ width: resolvedWidth, height: resolvedHeight }}
       onClick={handleNodeClick}
     >
       <NodeHeader
@@ -154,23 +167,17 @@ export const UploadNode = memo(({ id, data, selected }: UploadNodeProps) => {
 
       {data.imageUrl ? (
         <div
-          className="block inset-0 overflow-hidden rounded-[var(--node-radius)] bg-bg-dark"
-          style={{
-            aspectRatio: toCssAspectRatio(data.aspectRatio || DEFAULT_ASPECT_RATIO),
-          }}
+          className="block h-full w-full overflow-hidden rounded-[var(--node-radius)] bg-bg-dark"
         >
           <img
             src={imageSource ?? ''}
             alt="Uploaded"
-            className="h-full w-full object-cover"
+            className="h-full w-full object-contain"
           />
         </div>
       ) : (
         <label
-          className="block inset-0 overflow-hidden rounded-[var(--node-radius)] bg-bg-dark"
-          style={{
-            aspectRatio: toCssAspectRatio(data.aspectRatio || DEFAULT_ASPECT_RATIO),
-          }}
+          className="block h-full w-full overflow-hidden rounded-[var(--node-radius)] bg-bg-dark"
           onDrop={handleDrop}
           onDragOver={(event) => event.preventDefault()}
         >
@@ -193,6 +200,7 @@ export const UploadNode = memo(({ id, data, selected }: UploadNodeProps) => {
         position={Position.Right}
         className="!h-2 !w-2 !border-surface-dark !bg-accent"
       />
+      <NodeResizeHandle minWidth={160} minHeight={100} maxWidth={1400} maxHeight={1400} />
     </div>
   );
 });

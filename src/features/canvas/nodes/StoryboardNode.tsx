@@ -15,6 +15,7 @@ import {
   type MergeStoryboardImagesResult,
 } from '@/commands/image';
 import { NodeHeader, NODE_HEADER_FLOATING_POSITION_CLASS } from '@/features/canvas/ui/NodeHeader';
+import { NodeResizeHandle } from '@/features/canvas/ui/NodeResizeHandle';
 import type {
   CanvasNode,
   StoryboardExportOptions,
@@ -48,6 +49,7 @@ type StoryboardNodeProps = NodeProps & {
 };
 
 const STORYBOARD_NODE_WIDTH_PX = 318;
+const STORYBOARD_NODE_MIN_HEIGHT_PX = 320;
 const STORYBOARD_GRID_GAP_PX = 1;
 const EXPORT_MAX_DIMENSION = 4096;
 const EXPORT_TRACE_PREFIX = '[StoryboardExport]';
@@ -283,7 +285,7 @@ const FrameCard = memo(
           onSortHover(frame.id);
         }}
         onMouseDown={(event) => event.stopPropagation()}
-        className={`nodrag relative bg-bg-dark/85 transition-all ${dragging
+        className={`nodrag relative bg-bg-dark/85 transition-colors ${dragging
           ? 'z-10 opacity-55 ring-1 ring-accent/65'
           : asDropTarget
             ? 'z-10 ring-1 ring-emerald-400/70'
@@ -360,7 +362,7 @@ const FrameCard = memo(
 
 FrameCard.displayName = 'FrameCard';
 
-export const StoryboardNode = memo(({ id, data, selected }: StoryboardNodeProps) => {
+export const StoryboardNode = memo(({ id, data, selected, width, height }: StoryboardNodeProps) => {
   const rootRef = useRef<HTMLDivElement>(null);
   const pickerMenuRef = useRef<HTMLDivElement>(null);
   const setSelectedNode = useCanvasStore((state) => state.setSelectedNode);
@@ -404,13 +406,18 @@ export const StoryboardNode = memo(({ id, data, selected }: StoryboardNodeProps)
   const gridCols = Math.max(1, data.gridCols);
   const gridRows = Math.max(1, data.gridRows);
   const totalFrames = orderedFrames.length;
+  const resolvedNodeWidth = Math.max(STORYBOARD_NODE_WIDTH_PX, Math.round(width ?? STORYBOARD_NODE_WIDTH_PX));
+  const resolvedNodeHeight = Math.max(
+    STORYBOARD_NODE_MIN_HEIGHT_PX,
+    Math.round(height ?? STORYBOARD_NODE_MIN_HEIGHT_PX)
+  );
   const resolvedTitle = useMemo(
     () => resolveNodeDisplayName(CANVAS_NODE_TYPES.storyboardSplit, data),
     [data]
   );
 
   const gridMetrics = useMemo(() => {
-    const contentWidth = STORYBOARD_NODE_WIDTH_PX - 16;
+    const contentWidth = resolvedNodeWidth - 16;
     const gap = STORYBOARD_GRID_GAP_PX;
     const cellWidth = Math.max(
       26,
@@ -422,7 +429,7 @@ export const StoryboardNode = memo(({ id, data, selected }: StoryboardNodeProps)
       cellWidth,
       cellHeight: Math.max(18, Math.round(cellWidth / aspectValue)),
     };
-  }, [aspectValue, gridCols]);
+  }, [aspectValue, gridCols, resolvedNodeWidth]);
 
   const exportOptions = useMemo(
     () => resolveExportOptions(data.exportOptions),
@@ -780,12 +787,12 @@ export const StoryboardNode = memo(({ id, data, selected }: StoryboardNodeProps)
     <div
       ref={rootRef}
       className={`
-        relative overflow-visible rounded-[var(--node-radius)] border bg-surface-dark/90 p-2 transition-all duration-150
+        group relative flex h-full flex-col overflow-visible rounded-[var(--node-radius)] border bg-surface-dark/90 p-2 transition-colors duration-150
         ${selected
           ? 'border-accent shadow-[0_0_0_1px_rgba(59,130,246,0.32)]'
           : 'border-[rgba(255,255,255,0.22)] hover:border-[rgba(255,255,255,0.34)]'}
       `}
-      style={{ width: `${STORYBOARD_NODE_WIDTH_PX}px` }}
+      style={{ width: `${resolvedNodeWidth}px`, height: `${resolvedNodeHeight}px` }}
       onClick={() => setSelectedNode(id)}
     >
       <NodeHeader
@@ -818,7 +825,7 @@ export const StoryboardNode = memo(({ id, data, selected }: StoryboardNodeProps)
         </UiButton>
       </div>
 
-      <div className="ui-scrollbar max-h-[420px] overflow-auto">
+      <div className="ui-scrollbar min-h-0 flex-1 overflow-auto">
         <div
           className="grid overflow-hidden rounded-lg border border-[rgba(255,255,255,0.16)] bg-[rgba(255,255,255,0.14)]"
           style={{
@@ -889,7 +896,7 @@ export const StoryboardNode = memo(({ id, data, selected }: StoryboardNodeProps)
         : null}
 
       <details
-        className="nodrag mt-2 rounded-lg border border-[rgba(255,255,255,0.12)] bg-bg-dark/55 p-2"
+        className="nodrag mt-2 shrink-0 rounded-lg border border-[rgba(255,255,255,0.12)] bg-bg-dark/55 p-2"
         onClick={(event) => event.stopPropagation()}
       >
         <summary className="cursor-pointer select-none text-xs text-text-muted">导出设置</summary>
@@ -1003,7 +1010,7 @@ export const StoryboardNode = memo(({ id, data, selected }: StoryboardNodeProps)
         </div>
       </details>
 
-      {exportError && <div className="mt-2 text-xs text-red-400">{exportError}</div>}
+      {exportError && <div className="mt-2 shrink-0 text-xs text-red-400">{exportError}</div>}
 
       <Handle
         type="target"
@@ -1014,6 +1021,12 @@ export const StoryboardNode = memo(({ id, data, selected }: StoryboardNodeProps)
         type="source"
         position={Position.Right}
         className="!h-2 !w-2 !border-surface-dark !bg-accent"
+      />
+      <NodeResizeHandle
+        minWidth={STORYBOARD_NODE_WIDTH_PX}
+        minHeight={STORYBOARD_NODE_MIN_HEIGHT_PX}
+        maxWidth={1800}
+        maxHeight={1600}
       />
     </div>
   );

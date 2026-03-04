@@ -15,6 +15,7 @@ import {
 } from '@/features/canvas/application/imageData';
 import { resolveNodeDisplayName } from '@/features/canvas/domain/nodeDisplay';
 import { NodeHeader, NODE_HEADER_FLOATING_POSITION_CLASS } from '@/features/canvas/ui/NodeHeader';
+import { NodeResizeHandle } from '@/features/canvas/ui/NodeResizeHandle';
 import { useCanvasStore } from '@/stores/canvasStore';
 
 type ImageNodeProps = NodeProps & {
@@ -23,12 +24,17 @@ type ImageNodeProps = NodeProps & {
   selected?: boolean;
 };
 
-function toCssAspectRatio(aspectRatio: string): string {
-  const [width = '1', height = '1'] = aspectRatio.split(':');
-  return `${width} / ${height}`;
+function toAspectRatioValue(aspectRatio: string): number {
+  const [rawWidth = '1', rawHeight = '1'] = aspectRatio.split(':');
+  const width = Number(rawWidth);
+  const height = Number(rawHeight);
+  if (!Number.isFinite(width) || !Number.isFinite(height) || width <= 0 || height <= 0) {
+    return 1;
+  }
+  return width / height;
 }
 
-export const ImageNode = memo(({ id, data, selected, type }: ImageNodeProps) => {
+export const ImageNode = memo(({ id, data, selected, type, width, height }: ImageNodeProps) => {
   const setSelectedNode = useCanvasStore((state) => state.setSelectedNode);
   const updateNodeData = useCanvasStore((state) => state.updateNodeData);
   const { zoom } = useViewport();
@@ -39,6 +45,12 @@ export const ImageNode = memo(({ id, data, selected, type }: ImageNodeProps) => 
     typeof data.generationStartedAt === 'number' ? data.generationStartedAt : null;
   const generationDurationMs =
     typeof data.generationDurationMs === 'number' ? data.generationDurationMs : 60000;
+  const resolvedAspectRatio = data.aspectRatio || DEFAULT_ASPECT_RATIO;
+  const resolvedWidth = Math.max(160, Math.round(width ?? 220));
+  const resolvedHeight = Math.max(
+    100,
+    Math.round(height ?? (resolvedWidth / toAspectRatioValue(resolvedAspectRatio)))
+  );
   const resolvedTitle = useMemo(
     () => resolveNodeDisplayName(type as CanvasNodeType, data),
     [data, type]
@@ -81,11 +93,12 @@ export const ImageNode = memo(({ id, data, selected, type }: ImageNodeProps) => 
   return (
     <div
       className={`
-        relative overflow-visible w-[220px] rounded-[var(--node-radius)] border bg-surface-dark/85 p-0 transition-all duration-150
+        group relative overflow-visible rounded-[var(--node-radius)] border bg-surface-dark/85 p-0 transition-colors duration-150
         ${selected
           ? 'border-accent shadow-[0_0_0_1px_rgba(59,130,246,0.32)]'
           : 'border-[rgba(255,255,255,0.22)] hover:border-[rgba(255,255,255,0.34)]'}
       `}
+      style={{ width: resolvedWidth, height: resolvedHeight }}
       onClick={() => setSelectedNode(id)}
     >
       <NodeHeader
@@ -99,10 +112,7 @@ export const ImageNode = memo(({ id, data, selected, type }: ImageNodeProps) => 
       />
 
       <div
-        className="relative inset-0 overflow-hidden rounded-[var(--node-radius)] bg-bg-dark"
-        style={{
-          aspectRatio: toCssAspectRatio(data.aspectRatio || DEFAULT_ASPECT_RATIO),
-        }}
+        className="relative h-full w-full overflow-hidden rounded-[var(--node-radius)] bg-bg-dark"
       >
         {data.imageUrl ? (
           <img
@@ -144,6 +154,7 @@ export const ImageNode = memo(({ id, data, selected, type }: ImageNodeProps) => 
         position={Position.Right}
         className="!h-2 !w-2 !border-surface-dark !bg-accent"
       />
+      <NodeResizeHandle minWidth={160} minHeight={100} maxWidth={1600} maxHeight={1600} />
     </div>
   );
 });

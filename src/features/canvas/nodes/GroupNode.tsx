@@ -2,6 +2,7 @@ import { memo, useMemo } from 'react';
 import { LayoutGrid } from 'lucide-react';
 
 import { NodeHeader, NODE_HEADER_FLOATING_POSITION_CLASS } from '@/features/canvas/ui/NodeHeader';
+import { NodeResizeHandle } from '@/features/canvas/ui/NodeResizeHandle';
 import { CANVAS_NODE_TYPES, type GroupNodeData } from '@/features/canvas/domain/canvasNodes';
 import { resolveNodeDisplayName } from '@/features/canvas/domain/nodeDisplay';
 import { useCanvasStore } from '@/stores/canvasStore';
@@ -21,7 +22,7 @@ export const GroupNode = memo(({ id, data, selected }: GroupNodeProps) => {
 
   return (
     <div
-      className={`relative h-full w-full overflow-visible rounded-[18px] border bg-[rgba(255,255,255,0.03)] backdrop-blur-[1px] ${
+      className={`group relative h-full w-full overflow-visible rounded-[18px] border bg-[rgba(255,255,255,0.03)] backdrop-blur-[1px] ${
         selected
           ? 'border-accent shadow-[0_0_0_1px_rgba(59,130,246,0.35)]'
           : 'border-[rgba(255,255,255,0.26)]'
@@ -37,6 +38,7 @@ export const GroupNode = memo(({ id, data, selected }: GroupNodeProps) => {
           label: nextTitle,
         })}
       />
+      <NodeResizeHandle minWidth={220} minHeight={140} maxWidth={2200} maxHeight={1600} />
     </div>
   );
 });

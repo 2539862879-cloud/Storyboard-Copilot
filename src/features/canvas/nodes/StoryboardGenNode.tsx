@@ -38,11 +38,14 @@ import {
   UiButton,
 } from '@/components/ui';
 import { NodeHeader, NODE_HEADER_FLOATING_POSITION_CLASS } from '@/features/canvas/ui/NodeHeader';
+import { NodeResizeHandle } from '@/features/canvas/ui/NodeResizeHandle';
 
 type StoryboardGenNodeProps = {
   id: string;
   data: StoryboardGenNodeData;
   selected?: boolean;
+  width?: number;
+  height?: number;
 };
 
 interface AspectRatioChoice {
@@ -60,6 +63,7 @@ const STORYBOARD_GRID_GAP_PX = 2;
 const STORYBOARD_GRID_BASE_CELL_HEIGHT_PX = 78;
 const STORYBOARD_GRID_MAX_WIDTH_PX = 320;
 const STORYBOARD_CONTROL_ROW_WIDTH_PX = 274;
+const STORYBOARD_PARAMS_ROW_WIDTH_PX = 286;
 const STORYBOARD_GEN_HEADER_ADJUST = { x: 0, y: 0, scale: 1 };
 const STORYBOARD_GEN_ICON_ADJUST = { x: 0, y: 0, scale: 0.95 };
 const STORYBOARD_GEN_TITLE_ADJUST = { x: 0, y: 0, scale: 1 };
@@ -75,6 +79,8 @@ const CONTROL_ROW_MARGIN_BOTTOM_PX = 10;
 const FRAME_GRID_MARGIN_BOTTOM_PX = 8;
 const PARAM_ROW_HEIGHT_PX = 20;
 const NODE_VERTICAL_PADDING_PX = 24;
+const FRAME_CELL_MIN_WIDTH_PX = 24;
+const FRAME_CELL_MIN_HEIGHT_PX = 16;
 
 type GridStepperControlProps = {
   label: string;
@@ -146,7 +152,7 @@ function toCssAspectRatio(aspectRatio: string): string {
   return `${width} / ${height}`;
 }
 
-export const StoryboardGenNode = memo(({ id, data, selected }: StoryboardGenNodeProps) => {
+export const StoryboardGenNode = memo(({ id, data, selected, width, height }: StoryboardGenNodeProps) => {
   const setSelectedNode = useCanvasStore((state) => state.setSelectedNode);
   const nodes = useCanvasStore((state) => state.nodes);
   const edges = useCanvasStore((state) => state.edges);
@@ -201,7 +207,7 @@ export const StoryboardGenNode = memo(({ id, data, selected }: StoryboardGenNode
     return selectedAspectRatio.value || DEFAULT_ASPECT_RATIO;
   }, [nodeData.aspectRatio, selectedAspectRatio.value]);
 
-  const frameLayout = useMemo(() => {
+  const baseFrameLayout = useMemo(() => {
     const aspectRatio = Math.max(0.1, parseAspectRatio(frameAspectRatioValue));
     let cellWidth = STORYBOARD_GRID_BASE_CELL_HEIGHT_PX * aspectRatio;
     let gridWidth = nodeData.gridCols * cellWidth + Math.max(0, nodeData.gridCols - 1) * STORYBOARD_GRID_GAP_PX;
@@ -213,13 +219,17 @@ export const StoryboardGenNode = memo(({ id, data, selected }: StoryboardGenNode
         nodeData.gridCols * cellWidth + Math.max(0, nodeData.gridCols - 1) * STORYBOARD_GRID_GAP_PX;
     }
 
-    const roundedCellWidth = Math.max(24, Math.round(cellWidth));
-    const roundedCellHeight = Math.max(16, Math.round(roundedCellWidth / aspectRatio));
+    const roundedCellWidth = Math.max(FRAME_CELL_MIN_WIDTH_PX, Math.round(cellWidth));
+    const roundedCellHeight = Math.max(FRAME_CELL_MIN_HEIGHT_PX, Math.round(roundedCellWidth / aspectRatio));
     const roundedGridWidth =
       nodeData.gridCols * roundedCellWidth + Math.max(0, nodeData.gridCols - 1) * STORYBOARD_GRID_GAP_PX;
     const roundedGridHeight =
       nodeData.gridRows * roundedCellHeight + Math.max(0, nodeData.gridRows - 1) * FRAME_GRID_GAP_PX;
-    const nodeInnerWidth = Math.max(STORYBOARD_CONTROL_ROW_WIDTH_PX, roundedGridWidth);
+    const nodeInnerWidth = Math.max(
+      STORYBOARD_CONTROL_ROW_WIDTH_PX,
+      STORYBOARD_PARAMS_ROW_WIDTH_PX,
+      roundedGridWidth
+    );
     const nodeWidth = Math.round(nodeInnerWidth + STORYBOARD_NODE_HORIZONTAL_PADDING_PX);
     const nodeHeight = Math.round(
       NODE_VERTICAL_PADDING_PX +
@@ -231,11 +241,8 @@ export const StoryboardGenNode = memo(({ id, data, selected }: StoryboardGenNode
     );
 
     return {
-      cellWidth: roundedCellWidth,
-      gridWidth: roundedGridWidth,
       nodeWidth,
       nodeHeight,
-      cellAspectRatio: toCssAspectRatio(frameAspectRatioValue),
     };
   }, [frameAspectRatioValue, nodeData.gridCols, nodeData.gridRows]);
 
@@ -252,6 +259,48 @@ export const StoryboardGenNode = memo(({ id, data, selected }: StoryboardGenNode
     () => (nodeData.gridRows ?? 1) * (nodeData.gridCols ?? 1),
     [nodeData.gridRows, nodeData.gridCols]
   );
+  const resolvedNodeWidth = Math.max(
+    baseFrameLayout.nodeWidth,
+    Math.round(width ?? baseFrameLayout.nodeWidth)
+  );
+  const resolvedNodeHeight = Math.max(
+    baseFrameLayout.nodeHeight,
+    Math.round(height ?? baseFrameLayout.nodeHeight)
+  );
+  const frameLayout = useMemo(() => {
+    const cols = Math.max(1, nodeData.gridCols);
+    const rows = Math.max(1, nodeData.gridRows);
+    const aspectRatio = Math.max(0.1, parseAspectRatio(frameAspectRatioValue));
+    const innerWidth = Math.max(120, resolvedNodeWidth - STORYBOARD_NODE_HORIZONTAL_PADDING_PX);
+    const availableGridHeight = Math.max(
+      72,
+      resolvedNodeHeight
+      - NODE_VERTICAL_PADDING_PX
+      - CONTROL_ROW_HEIGHT_PX
+      - CONTROL_ROW_MARGIN_BOTTOM_PX
+      - FRAME_GRID_MARGIN_BOTTOM_PX
+      - PARAM_ROW_HEIGHT_PX
+    );
+    const widthLimitedCellWidth =
+      (innerWidth - Math.max(0, cols - 1) * STORYBOARD_GRID_GAP_PX) / cols;
+    const heightLimitedCellHeight =
+      (availableGridHeight - Math.max(0, rows - 1) * FRAME_GRID_GAP_PX) / rows;
+    const heightLimitedCellWidth = heightLimitedCellHeight * aspectRatio;
+    const resolvedCellWidth = Math.floor(Math.min(widthLimitedCellWidth, heightLimitedCellWidth));
+    const cellWidth = Math.max(FRAME_CELL_MIN_WIDTH_PX, resolvedCellWidth);
+    const gridWidth = cols * cellWidth + Math.max(0, cols - 1) * STORYBOARD_GRID_GAP_PX;
+    const paramsRowWidth = Math.max(
+      STORYBOARD_PARAMS_ROW_WIDTH_PX,
+      Math.floor(innerWidth)
+    );
+
+    return {
+      cellWidth,
+      gridWidth,
+      paramsRowWidth,
+      cellAspectRatio: toCssAspectRatio(frameAspectRatioValue),
+    };
+  }, [frameAspectRatioValue, nodeData.gridCols, nodeData.gridRows, resolvedNodeHeight, resolvedNodeWidth]);
 
   // Sync model, size, aspect ratio with node data
   useEffect(() => {
@@ -477,15 +526,15 @@ export const StoryboardGenNode = memo(({ id, data, selected }: StoryboardGenNode
     <div
       ref={rootRef}
       className={`
-        relative overflow-visible rounded-[var(--node-radius)] border bg-surface-dark/95 p-3 transition-all duration-150
+        group relative flex h-full flex-col overflow-visible rounded-[var(--node-radius)] border bg-surface-dark/95 p-3 transition-colors duration-150
         ${selected
           ? 'border-accent shadow-[0_0_0_1px_rgba(59,130,246,0.32)]'
           : 'border-[rgba(255,255,255,0.22)] hover:border-[rgba(255,255,255,0.34)]'
         }
       `}
       style={{
-        width: `${frameLayout.nodeWidth}px`,
-        height: `${frameLayout.nodeHeight}px`,
+        width: `${resolvedNodeWidth}px`,
+        height: `${resolvedNodeHeight}px`,
       }}
       onClick={() => setSelectedNode(id)}
     >
@@ -502,7 +551,7 @@ export const StoryboardGenNode = memo(({ id, data, selected }: StoryboardGenNode
       />
 
       {/* Frame summary + grid settings */}
-      <div className="mb-2.5 flex items-center justify-between gap-2">
+      <div className="mb-2.5 flex shrink-0 items-center justify-between gap-2">
         <div className="flex items-center gap-1.5">
           <GridStepperControl
             label="行"
@@ -524,7 +573,7 @@ export const StoryboardGenNode = memo(({ id, data, selected }: StoryboardGenNode
       </div>
 
       {/* Frame Grid */}
-      <div className="mb-2 flex justify-center">
+      <div className="mb-2 flex min-h-0 flex-1 items-center justify-center">
         <div
           className="grid gap-0.5"
           style={{
@@ -550,8 +599,13 @@ export const StoryboardGenNode = memo(({ id, data, selected }: StoryboardGenNode
         </div>
       </div>
 
+      {error && <div className="mb-1.5 shrink-0 text-[10px] text-red-400">{error}</div>}
+
       {/* AI Parameters */}
-      <div className="relative mx-auto flex w-[280px] items-center justify-between">
+      <div
+        className="relative mx-auto mt-auto flex shrink-0 items-center justify-between"
+        style={{ width: `${frameLayout.paramsRowWidth}px` }}
+      >
         <ModelParamsControls
           imageModels={imageModels}
           selectedModel={selectedModel}
@@ -585,8 +639,6 @@ export const StoryboardGenNode = memo(({ id, data, selected }: StoryboardGenNode
         </UiButton>
       </div>
 
-      {error && <div className="mt-2 text-[10px] text-red-400">{error}</div>}
-
       <Handle
         type="target"
         position={Position.Left}
@@ -596,6 +648,12 @@ export const StoryboardGenNode = memo(({ id, data, selected }: StoryboardGenNode
         type="source"
         position={Position.Right}
         className="!h-2 !w-2 !border-surface-dark !bg-accent"
+      />
+      <NodeResizeHandle
+        minWidth={baseFrameLayout.nodeWidth}
+        minHeight={baseFrameLayout.nodeHeight}
+        maxWidth={1800}
+        maxHeight={1400}
       />
     </div>
   );
