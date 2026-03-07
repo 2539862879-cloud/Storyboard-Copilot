@@ -87,6 +87,24 @@ npm run build
 npm run tauri build
 ```
 
+## 一键发布（自动构建 + Release）
+
+本项目支持一条命令完成版本联动、触发 GitHub Actions 构建并发布 Release。
+
+```bash
+# patch 递增（例如 0.1.0 -> 0.1.1），并写入本次更新说明
+npm run release -- patch "修复导出节点在大图下崩溃；优化启动速度"
+
+# 或指定版本号
+npm run release -- 0.2.0 "新增分镜批量裁剪工具"
+```
+
+命令会自动执行：
+- 同步版本号到 `package.json`、`src-tauri/Cargo.toml`、`src-tauri/tauri.conf.json`
+- 提交版本变更并创建带说明的 tag（如 `v0.2.0`）
+- 推送分支和 tag，触发 `.github/workflows/build.yml`
+- 由 Action 构建 Windows/macOS 安装包并发布到 GitHub Releases（说明显示为 tag 注释）
+
 ## 项目结构（核心）
 
 ```text
@@ -153,4 +171,3 @@ docs/development-guides/    # 开发与扩展文档
 - [项目开发环境与注意事项](./docs/development-guides/project-development-setup.md)
 - [供应商与模型扩展指南](./docs/development-guides/provider-and-model-extension.md)
 - [基础工具安装配置（Windows / macOS）](./docs/development-guides/base-tools-installation.md)
-

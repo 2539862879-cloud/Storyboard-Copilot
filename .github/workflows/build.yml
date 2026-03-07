@@ -10,6 +10,10 @@ on:
         description: 'Release tag (example: v0.1.0). Leave empty to skip release job.'
         required: false
         type: string
+      release_notes:
+        description: 'Release notes shown on GitHub Release. Optional when using tag push.'
+        required: false
+        type: string
 
 jobs:
   build-windows:
@@ -48,10 +52,7 @@ jobs:
           } else {
             throw "Invalid release_tag. Use format like v0.1.0"
           }
-          $CURRENT = (Get-Content package.json | ConvertFrom-Json).version
-          if ($CURRENT -ne $VERSION) {
-            npm version $VERSION --no-git-tag-version
-          }
+          node scripts/sync-version.mjs $VERSION
 
       - name: Install dependencies
         run: npm ci
@@ -130,13 +131,7 @@ jobs:
             echo "Invalid release_tag. Use format like v0.1.0"
             exit 1
           fi
-          CURRENT=$(node -p "require('./package.json').version")
-          if [ "$CURRENT" != "$VERSION" ]; then
-            echo "Updating package.json version from $CURRENT to $VERSION"
-            npm version "$VERSION" --no-git-tag-version
-          else
-            echo "package.json already at version $VERSION — skipping npm version"
-          fi
+          node scripts/sync-version.mjs "$VERSION"
 
       - name: Install dependencies
         run: npm ci
@@ -194,8 +189,13 @@ jobs:
     permissions:
       contents: write
     steps:
-      - name: Resolve release tag
-        id: resolve_tag
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Resolve release metadata
+        id: resolve_release
         shell: bash
         run: |
           if [[ "$GITHUB_REF" == refs/tags/v* ]]; then
@@ -207,7 +207,24 @@ jobs:
             echo "Invalid release tag: $TAG"
             exit 1
           fi
+
+          NOTES_INPUT="${{ github.event.inputs.release_notes }}"
+          if [[ -n "$NOTES_INPUT" ]]; then
+            BODY="$NOTES_INPUT"
+          else
+            BODY="$(git for-each-ref "refs/tags/$TAG" --format='%(contents)' | sed '/^[[:space:]]*$/d')"
+          fi
+
+          if [[ -z "$BODY" ]]; then
+            BODY="Release $TAG"
+          fi
+
           echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          {
+            echo "body<<EOF"
+            echo "$BODY"
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
 
       - name: Download Windows installer
         uses: actions/download-artifact@v4
@@ -224,8 +241,9 @@ jobs:
       - name: Create Release
         uses: softprops/action-gh-release@v1
         with:
-          tag_name: ${{ steps.resolve_tag.outputs.tag }}
+          tag_name: ${{ steps.resolve_release.outputs.tag }}
           target_commitish: ${{ github.sha }}
+          body: ${{ steps.resolve_release.outputs.body }}
           files: |
             artifacts/windows/*.exe
             artifacts/macos/*.dmg
