@@ -27,6 +27,7 @@ import {
   canvasAiGateway,
   graphImageResolver,
 } from '@/features/canvas/application/canvasServices';
+import { showErrorDialog } from '@/features/canvas/application/errorDialog';
 import {
   detectAspectRatio,
   parseAspectRatio,
@@ -43,6 +44,9 @@ import {
   getImageModel,
   listImageModels,
 } from '@/features/canvas/models';
+import { GRSAI_NANO_BANANA_PRO_MODEL_ID } from '@/features/canvas/models/image/grsai/nanoBananaPro';
+import { FAL_NANO_BANANA_2_MODEL_ID } from '@/features/canvas/models/image/fal/nanoBanana2';
+import { KIE_NANO_BANANA_2_MODEL_ID } from '@/features/canvas/models/image/kie/nanoBanana2';
 import {
   NODE_CONTROL_CHIP_CLASS,
   NODE_CONTROL_ICON_CLASS,
@@ -239,6 +243,7 @@ export const ImageEditNode = memo(({ id, data, selected, width, height }: ImageE
   const findNodePosition = useCanvasStore((state) => state.findNodePosition);
   const addEdge = useCanvasStore((state) => state.addEdge);
   const apiKeys = useSettingsStore((state) => state.apiKeys);
+  const grsaiNanoBananaProModel = useSettingsStore((state) => state.grsaiNanoBananaProModel);
 
   const incomingImages = useMemo(
     () => graphImageResolver.collectInputImages(id, nodes, edges),
@@ -293,6 +298,10 @@ export const ImageEditNode = memo(({ id, data, selected, width, height }: ImageE
   const requestResolution = selectedModel.resolveRequest({
     referenceImageCount: incomingImages.length,
   });
+  const showWebSearchToggle =
+    selectedModel.id === FAL_NANO_BANANA_2_MODEL_ID ||
+    selectedModel.id === KIE_NANO_BANANA_2_MODEL_ID;
+  const webSearchEnabled = Boolean(data.extraParams?.enable_web_search);
 
   const supportedAspectRatioValues = useMemo(
     () => selectedModel.aspectRatios.map((item) => item.value),
@@ -373,12 +382,16 @@ export const ImageEditNode = memo(({ id, data, selected, width, height }: ImageE
   const handleGenerate = useCallback(async () => {
     const prompt = promptDraft.replace(/@(?=图\d+)/g, '').trim();
     if (!prompt) {
-      setError(t('node.imageEdit.promptRequired'));
+      const errorMessage = t('node.imageEdit.promptRequired');
+      setError(errorMessage);
+      void showErrorDialog(errorMessage, t('common.error'));
       return;
     }
 
     if (!providerApiKey) {
-      setError(t('node.imageEdit.apiKeyRequired'));
+      const errorMessage = t('node.imageEdit.apiKeyRequired');
+      setError(errorMessage);
+      void showErrorDialog(errorMessage, t('common.error'));
       return;
     }
 
@@ -432,7 +445,12 @@ export const ImageEditNode = memo(({ id, data, selected, width, height }: ImageE
         size: selectedResolution.value,
         aspectRatio: resolvedRequestAspectRatio,
         referenceImages: incomingImages,
-        extraParams: data.extraParams,
+        extraParams: {
+          ...(data.extraParams ?? {}),
+          ...(selectedModel.id === GRSAI_NANO_BANANA_PRO_MODEL_ID
+            ? { grsai_pro_model: grsaiNanoBananaProModel }
+            : {}),
+        },
       });
 
       const prepared = await prepareNodeImage(resultUrl);
@@ -444,7 +462,10 @@ export const ImageEditNode = memo(({ id, data, selected, width, height }: ImageE
         generationStartedAt: null,
       });
     } catch (generationError) {
-      setError(generationError instanceof Error ? generationError.message : t('ai.error'));
+      const errorMessage =
+        generationError instanceof Error ? generationError.message : t('ai.error');
+      setError(errorMessage);
+      void showErrorDialog(errorMessage, t('common.error'));
       updateNodeData(newNodeId, {
         isGenerating: false,
         generationStartedAt: null,
@@ -457,10 +478,12 @@ export const ImageEditNode = memo(({ id, data, selected, width, height }: ImageE
     findNodePosition,
     promptDraft,
     data.extraParams,
+    grsaiNanoBananaProModel,
     id,
     incomingImages,
     requestResolution.requestModel,
     selectedAspectRatio.value,
+    selectedModel.id,
     selectedModel.expectedDurationMs,
     selectedModel.providerId,
     selectedResolution.value,
@@ -680,6 +703,16 @@ export const ImageEditNode = memo(({ id, data, selected, width, height }: ImageE
             {
               updateNodeData(id, { requestAspectRatio: aspectRatio });
             }
+          }
+          showWebSearchToggle={showWebSearchToggle}
+          webSearchEnabled={webSearchEnabled}
+          onWebSearchToggle={(enabled) =>
+            updateNodeData(id, {
+              extraParams: {
+                ...(data.extraParams ?? {}),
+                enable_web_search: enabled,
+              },
+            })
           }
           triggerSize="sm"
           chipClassName={NODE_CONTROL_CHIP_CLASS}

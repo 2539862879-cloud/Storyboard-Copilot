@@ -28,6 +28,7 @@ import {
   canvasAiGateway,
   graphImageResolver,
 } from '@/features/canvas/application/canvasServices';
+import { showErrorDialog } from '@/features/canvas/application/errorDialog';
 import {
   detectAspectRatio,
   prepareNodeImage,
@@ -48,6 +49,9 @@ import {
   getImageModel,
   listImageModels,
 } from '@/features/canvas/models';
+import { GRSAI_NANO_BANANA_PRO_MODEL_ID } from '@/features/canvas/models/image/grsai/nanoBananaPro';
+import { FAL_NANO_BANANA_2_MODEL_ID } from '@/features/canvas/models/image/fal/nanoBanana2';
+import { KIE_NANO_BANANA_2_MODEL_ID } from '@/features/canvas/models/image/kie/nanoBanana2';
 import { ModelParamsControls } from '@/features/canvas/ui/ModelParamsControls';
 import { CanvasNodeImage } from '@/features/canvas/ui/CanvasNodeImage';
 import {
@@ -456,6 +460,7 @@ export const StoryboardGenNode = memo(({ id, data, selected, width, height }: St
   const addEdge = useCanvasStore((state) => state.addEdge);
   const findNodePosition = useCanvasStore((state) => state.findNodePosition);
   const apiKeys = useSettingsStore((state) => state.apiKeys);
+  const grsaiNanoBananaProModel = useSettingsStore((state) => state.grsaiNanoBananaProModel);
   const storyboardGenKeepStyleConsistent = useSettingsStore(
     (state) => state.storyboardGenKeepStyleConsistent
   );
@@ -586,6 +591,10 @@ export const StoryboardGenNode = memo(({ id, data, selected, width, height }: St
   const requestResolution = selectedModel.resolveRequest({
     referenceImageCount: incomingImages.length,
   });
+  const showWebSearchToggle =
+    selectedModel.id === FAL_NANO_BANANA_2_MODEL_ID ||
+    selectedModel.id === KIE_NANO_BANANA_2_MODEL_ID;
+  const webSearchEnabled = Boolean(nodeData.extraParams?.enable_web_search);
 
   const supportedAspectRatioValues = useMemo(
     () => selectedModel.aspectRatios.map((item) => item.value),
@@ -770,12 +779,16 @@ export const StoryboardGenNode = memo(({ id, data, selected, width, height }: St
 
     const prompt = buildPrompt();
     if (!prompt) {
-      setError('请填写至少一个分镜内容描述');
+      const errorMessage = '请填写至少一个分镜内容描述';
+      setError(errorMessage);
+      void showErrorDialog(errorMessage, '错误');
       return;
     }
 
     if (!providerApiKey) {
-      setError('请在设置中填写 API Key');
+      const errorMessage = '请在设置中填写 API Key';
+      setError(errorMessage);
+      void showErrorDialog(errorMessage, '错误');
       return;
     }
 
@@ -849,7 +862,12 @@ export const StoryboardGenNode = memo(({ id, data, selected, width, height }: St
         size: selectedResolution.value,
         aspectRatio: resolvedRequestAspectRatio,
         referenceImages: allReferenceImages,
-        extraParams: nodeData.extraParams,
+        extraParams: {
+          ...(nodeData.extraParams ?? {}),
+          ...(selectedModel.id === GRSAI_NANO_BANANA_PRO_MODEL_ID
+            ? { grsai_pro_model: grsaiNanoBananaProModel }
+            : {}),
+        },
       });
 
       const prepared = await prepareNodeImage(resultUrl);
@@ -880,7 +898,9 @@ export const StoryboardGenNode = memo(({ id, data, selected, width, height }: St
         generationStartedAt: null,
       });
     } catch (generationError) {
-      setError(generationError instanceof Error ? generationError.message : '生成失败');
+      const errorMessage = generationError instanceof Error ? generationError.message : '生成失败';
+      setError(errorMessage);
+      void showErrorDialog(errorMessage, '错误');
       // Clear generating state and mark as failed
       updateNodeData(newNodeId, {
         isGenerating: false,
@@ -893,7 +913,9 @@ export const StoryboardGenNode = memo(({ id, data, selected, width, height }: St
     incomingImages,
     requestResolution.requestModel,
     nodeData.extraParams,
+    grsaiNanoBananaProModel,
     selectedModel.expectedDurationMs,
+    selectedModel.id,
     selectedModel.providerId,
     supportedAspectRatioValues,
     setSelectedNode,
@@ -1267,6 +1289,16 @@ export const StoryboardGenNode = memo(({ id, data, selected, width, height }: St
           }
           onAspectRatioChange={(aspectRatio) =>
             updateNodeData(id, { requestAspectRatio: aspectRatio })
+          }
+          showWebSearchToggle={showWebSearchToggle}
+          webSearchEnabled={webSearchEnabled}
+          onWebSearchToggle={(enabled) =>
+            updateNodeData(id, {
+              extraParams: {
+                ...(nodeData.extraParams ?? {}),
+                enable_web_search: enabled,
+              },
+            })
           }
           triggerSize="sm"
           chipClassName={NODE_CONTROL_CHIP_CLASS}

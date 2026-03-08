@@ -42,6 +42,7 @@ interface UiModalProps {
   children: ReactNode;
   footer?: ReactNode;
   widthClassName?: string;
+  containerClassName?: string;
 }
 
 function resolveButtonVariant(variant: ButtonVariant): string {
@@ -185,6 +186,7 @@ export function UiModal({
   children,
   footer,
   widthClassName = 'w-[460px]',
+  containerClassName = '',
 }: UiModalProps) {
   const { shouldRender, isVisible } = useDialogTransition(isOpen, UI_DIALOG_TRANSITION_MS);
 
@@ -193,7 +195,7 @@ export function UiModal({
   }
 
   return (
-    <div className={`fixed ${UI_CONTENT_OVERLAY_INSET_CLASS} z-50 flex items-center justify-center`}>
+    <div className={`fixed ${UI_CONTENT_OVERLAY_INSET_CLASS} z-50 flex items-center justify-center ${containerClassName}`}>
       <div
         className={`absolute inset-0 bg-black/55 transition-opacity duration-200 ${isVisible ? 'opacity-100' : 'opacity-0'}`}
         onClick={onClose}

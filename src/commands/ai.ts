@@ -12,6 +12,7 @@ export interface GenerateRequest {
 const BASE64_PREVIEW_HEAD = 96;
 const BASE64_PREVIEW_TAIL = 24;
 const INVOKE_TIMEOUT_MS = 120_000;
+const KIE_INVOKE_TIMEOUT_MS = 12 * 60_000;
 
 function withTimeout<T>(promise: Promise<T>, timeoutMs: number, action: string): Promise<T> {
   return new Promise<T>((resolve, reject) => {
@@ -73,6 +74,10 @@ function sanitizeGenerateRequestForLog(request: GenerateRequest): Record<string,
   };
 }
 
+function resolveInvokeTimeoutMs(request: GenerateRequest): number {
+  return request.model.startsWith('kie/') ? KIE_INVOKE_TIMEOUT_MS : INVOKE_TIMEOUT_MS;
+}
+
 export async function setApiKey(provider: string, apiKey: string): Promise<void> {
   console.info('[AI] set_api_key', {
     provider,
@@ -87,8 +92,10 @@ export async function setApiKey(provider: string, apiKey: string): Promise<void>
 
 export async function generateImage(request: GenerateRequest): Promise<string> {
   const startedAt = performance.now();
+  const timeoutMs = resolveInvokeTimeoutMs(request);
   console.info('[AI] generate_image request', {
     ...sanitizeGenerateRequestForLog(request),
+    timeoutMs,
     tauri: isTauri(),
   });
 
@@ -99,7 +106,7 @@ export async function generateImage(request: GenerateRequest): Promise<string> {
   try {
     const result = await withTimeout(
       invoke<string>('generate_image', { request }),
-      INVOKE_TIMEOUT_MS,
+      timeoutMs,
       'generate_image'
     );
     const elapsedMs = Math.round(performance.now() - startedAt);
@@ -109,29 +116,13 @@ export async function generateImage(request: GenerateRequest): Promise<string> {
     });
     return result;
   } catch (error) {
-    // IPC custom protocol can fail transiently in dev; retry once.
-    try {
-      console.warn('[AI] generate_image retry after failure', { error });
-      const retryResult = await withTimeout(
-        invoke<string>('generate_image', { request }),
-        INVOKE_TIMEOUT_MS,
-        'generate_image(retry)'
-      );
-      const elapsedMs = Math.round(performance.now() - startedAt);
-      console.info('[AI] generate_image success(after retry)', {
-        elapsedMs,
-        resultPreview: truncateText(retryResult, 220),
-      });
-      return retryResult;
-    } catch (retryError) {
-      const elapsedMs = Math.round(performance.now() - startedAt);
-      console.error('[AI] generate_image failed', {
-        elapsedMs,
-        request: sanitizeGenerateRequestForLog(request),
-        error: retryError,
-      });
-      throw retryError;
-    }
+    const elapsedMs = Math.round(performance.now() - startedAt);
+    console.error('[AI] generate_image failed', {
+      elapsedMs,
+      request: sanitizeGenerateRequestForLog(request),
+      error,
+    });
+    throw error;
   }
 }
 

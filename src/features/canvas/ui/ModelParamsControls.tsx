@@ -1,6 +1,6 @@
 import { memo, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { SlidersHorizontal, Zap } from 'lucide-react';
+import { Check, SlidersHorizontal, Zap } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 
 import { AUTO_REQUEST_ASPECT_RATIO } from '@/features/canvas/domain/canvasNodes';
@@ -12,8 +12,12 @@ import {
 } from '@/features/canvas/models';
 import {
   UiChipButton,
+  UiModal,
   UiPanel,
+  UiButton,
 } from '@/components/ui';
+import { useSettingsStore } from '@/stores/settingsStore';
+import { openSettingsDialog } from '@/features/settings/settingsEvents';
 
 interface ModelParamsControlsProps {
   imageModels: ImageModelDefinition[];
@@ -24,6 +28,10 @@ interface ModelParamsControlsProps {
   onModelChange: (modelId: string) => void;
   onResolutionChange: (resolution: string) => void;
   onAspectRatioChange: (aspectRatio: string) => void;
+  showWebSearchToggle?: boolean;
+  webSearchEnabled?: boolean;
+  onWebSearchToggle?: (enabled: boolean) => void;
+  webSearchLabel?: string;
   showProviderName?: boolean;
   triggerSize?: 'md' | 'sm';
   chipClassName?: string;
@@ -86,11 +94,15 @@ export const ModelParamsControls = memo(({
   onModelChange,
   onResolutionChange,
   onAspectRatioChange,
+  showWebSearchToggle = false,
+  webSearchEnabled = false,
+  onWebSearchToggle,
+  webSearchLabel,
   showProviderName = true,
   triggerSize = 'md',
   chipClassName = '',
-  modelChipClassName = 'w-[220px] justify-start',
-  paramsChipClassName = 'w-[120px] justify-start',
+  modelChipClassName = 'w-auto justify-start',
+  paramsChipClassName = 'w-auto justify-start',
   modelPanelAlign = 'center',
   paramsPanelAlign = 'center',
   modelPanelClassName = 'w-[360px] p-2',
@@ -107,11 +119,50 @@ export const ModelParamsControls = memo(({
   const [isPanelVisible, setIsPanelVisible] = useState(false);
   const [modelPanelAnchor, setModelPanelAnchor] = useState<PanelAnchor | null>(null);
   const [paramsPanelAnchor, setParamsPanelAnchor] = useState<PanelAnchor | null>(null);
+  const [modelAnchorBaseWidth, setModelAnchorBaseWidth] = useState<number | null>(null);
+  const [paramsAnchorBaseWidth, setParamsAnchorBaseWidth] = useState<number | null>(null);
+  const [panelProviderId, setPanelProviderId] = useState(selectedModel.providerId);
+  const [missingKeyProviderName, setMissingKeyProviderName] = useState<string | null>(null);
+  const apiKeys = useSettingsStore((state) => state.apiKeys);
 
   const selectedProvider = useMemo(
     () => getModelProvider(selectedModel.providerId),
     [selectedModel.providerId]
   );
+  const selectedModelName = useMemo(
+    () => selectedModel.displayName.replace(/\s*\([^)]*\)\s*$/u, '').trim() || selectedModel.displayName,
+    [selectedModel.displayName]
+  );
+  const selectedProviderName = selectedProvider.label || selectedProvider.name;
+  const providerOptions = useMemo(() => {
+    const providerOrder = ['ppio', 'fal', 'kie', 'grsai'];
+    const providerIndex = new Map(providerOrder.map((id, index) => [id, index]));
+    const uniqueProviderIds = Array.from(new Set(imageModels.map((model) => model.providerId)));
+    return uniqueProviderIds
+      .map((providerId) => getModelProvider(providerId))
+      .sort((left, right) => {
+        const leftIndex = providerIndex.get(left.id) ?? Number.MAX_SAFE_INTEGER;
+        const rightIndex = providerIndex.get(right.id) ?? Number.MAX_SAFE_INTEGER;
+        return leftIndex - rightIndex;
+      });
+  }, [imageModels]);
+  const providerModels = useMemo(
+    () => imageModels.filter((model) => model.providerId === panelProviderId),
+    [imageModels, panelProviderId]
+  );
+  const modelGroups = useMemo(() => {
+    const grouped = new Map<string, ImageModelDefinition[]>();
+    providerModels.forEach((model) => {
+      const normalizedName = model.displayName.replace(/\s*\([^)]*\)\s*$/u, '').trim();
+      const key = normalizedName.length > 0 ? normalizedName : model.displayName;
+      const current = grouped.get(key) ?? [];
+      current.push(model);
+      grouped.set(key, current);
+    });
+    return Array.from(grouped.entries())
+      .map(([name, models]) => ({ name, models }))
+      .sort((a, b) => a.name.localeCompare(b.name));
+  }, [providerModels]);
   const isCompactTrigger = triggerSize === 'sm';
   const modelIconClassName = isCompactTrigger ? 'h-3 w-3 shrink-0' : 'h-4 w-4 shrink-0';
   const paramsIconClassName = isCompactTrigger ? 'h-2.5 w-2.5 shrink-0' : 'h-4 w-4 shrink-0';
@@ -218,14 +269,16 @@ export const ModelParamsControls = memo(({
 
   const getPanelAnchor = (
     triggerElement: HTMLDivElement | null,
-    align: 'center' | 'start'
+    align: 'center' | 'start',
+    baseWidth?: number | null
   ): PanelAnchor | null => {
     if (!triggerElement) {
       return null;
     }
     const rect = triggerElement.getBoundingClientRect();
+    const anchorWidth = typeof baseWidth === 'number' && baseWidth > 0 ? baseWidth : rect.width;
     return {
-      left: align === 'center' ? rect.left + rect.width / 2 : rect.left,
+      left: align === 'center' ? rect.left + anchorWidth / 2 : rect.left,
       top: rect.top - 8,
     };
   };
@@ -258,14 +311,20 @@ export const ModelParamsControls = memo(({
               setOpenPanel(null);
               return;
             }
-            setModelPanelAnchor(getPanelAnchor(modelTriggerRef.current, modelPanelAlign));
+            setPanelProviderId(selectedModel.providerId);
+            const triggerWidth = modelTriggerRef.current?.getBoundingClientRect().width ?? null;
+            const nextBaseWidth = modelAnchorBaseWidth ?? triggerWidth;
+            if (modelAnchorBaseWidth == null && triggerWidth) {
+              setModelAnchorBaseWidth(triggerWidth);
+            }
+            setModelPanelAnchor(getPanelAnchor(modelTriggerRef.current, modelPanelAlign, nextBaseWidth));
             setOpenPanel('model');
           }}
         >
           <NanoBananaIcon className={modelIconClassName} />
-          <span className={modelTextClassName}>{selectedModel.displayName}</span>
+          <span className={modelTextClassName}>{selectedModelName}</span>
           {showProviderName && (
-            <span className={providerTextClassName}>{selectedProvider.name}</span>
+            <span className={providerTextClassName}>{selectedProviderName}</span>
           )}
         </UiChipButton>
       </div>
@@ -280,7 +339,12 @@ export const ModelParamsControls = memo(({
               setOpenPanel(null);
               return;
             }
-            setParamsPanelAnchor(getPanelAnchor(paramsTriggerRef.current, paramsPanelAlign));
+            const triggerWidth = paramsTriggerRef.current?.getBoundingClientRect().width ?? null;
+            const nextBaseWidth = paramsAnchorBaseWidth ?? triggerWidth;
+            if (paramsAnchorBaseWidth == null && triggerWidth) {
+              setParamsAnchorBaseWidth(triggerWidth);
+            }
+            setParamsPanelAnchor(getPanelAnchor(paramsTriggerRef.current, paramsPanelAlign, nextBaseWidth));
             setOpenPanel('params');
           }}
         >
@@ -290,6 +354,29 @@ export const ModelParamsControls = memo(({
         </UiChipButton>
       </div>
 
+      {showWebSearchToggle && (
+        <UiChipButton
+          active={webSearchEnabled}
+          className={`${chipClassName} w-auto justify-center shrink-0`}
+          onClick={(event) => {
+            event.stopPropagation();
+            onWebSearchToggle?.(!webSearchEnabled);
+          }}
+        >
+          <span
+            className={`inline-flex h-3 w-3 items-center justify-center rounded-[2px] border ${webSearchEnabled
+                ? 'border-accent bg-accent text-white'
+                : 'border-text-muted/70 bg-transparent text-transparent'
+              }`}
+          >
+            <Check className="h-2 w-2" strokeWidth={3} />
+          </span>
+          <span className={paramsPrimaryTextClassName}>
+            {webSearchLabel ?? t('modelParams.enableWebSearch')}
+          </span>
+        </UiChipButton>
+      )}
+
       {typeof document !== 'undefined' && renderPanel === 'model' && createPortal(
         <div
           ref={modelPanelRef}
@@ -298,36 +385,73 @@ export const ModelParamsControls = memo(({
           style={buildPanelStyle(modelPanelAnchor, modelPanelAlign)}
         >
           <UiPanel className={modelPanelClassName}>
-            <div className="ui-scrollbar max-h-[300px] space-y-1 overflow-y-auto pr-1">
-              {imageModels.map((model) => {
-                const provider = getModelProvider(model.providerId);
-                const active = model.id === selectedModel.id;
+            <div className="ui-scrollbar max-h-[340px] space-y-4 overflow-y-auto p-1">
+              <section>
+                <div className="mb-2 text-xs font-medium text-text-muted">
+                  {t('modelParams.provider')}
+                </div>
+                <div className="grid grid-cols-4 gap-2">
+                  {providerOptions.map((provider) => {
+                    const active = provider.id === panelProviderId;
+                    return (
+                      <button
+                        key={provider.id}
+                        className={`h-8 rounded-lg border px-2 text-xs transition-colors ${active
+                          ? 'border-accent/50 bg-accent/15 text-text-dark'
+                          : 'border-[rgba(255,255,255,0.12)] bg-bg-dark/65 text-text-muted hover:border-[rgba(255,255,255,0.2)]'
+                          }`}
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          const providerApiKey = (apiKeys[provider.id] ?? '').trim();
+                          if (!providerApiKey) {
+                            setOpenPanel(null);
+                            setMissingKeyProviderName(provider.label || provider.name);
+                            return;
+                          }
+                          if (provider.id !== panelProviderId) {
+                            const firstModel = imageModels.find((model) => model.providerId === provider.id);
+                            if (firstModel) {
+                              onModelChange(firstModel.id);
+                            }
+                          }
+                          setPanelProviderId(provider.id);
+                        }}
+                      >
+                        {provider.label || provider.name}
+                      </button>
+                    );
+                  })}
+                </div>
+              </section>
 
-                return (
-                  <button
-                    key={model.id}
-                    className={`flex w-full items-start gap-3 rounded-xl border px-3 py-2 text-left transition-colors ${active
-                      ? 'border-accent/45 bg-accent/15'
-                      : 'border-transparent bg-bg-dark/70 hover:border-[rgba(255,255,255,0.14)]'
-                      }`}
-                    onClick={(event) => {
-                      event.stopPropagation();
-                      onModelChange(model.id);
-                      setOpenPanel(null);
-                    }}
-                  >
-                    <div className="mt-0.5 flex h-8 w-8 items-center justify-center rounded-lg bg-bg-dark text-text-muted">
-                      <NanoBananaIcon className="h-4 w-4" />
-                    </div>
-                    <div className="min-w-0 flex-1">
-                      <div className="truncate text-sm text-text-dark">{model.displayName}</div>
-                      <div className="truncate text-xs text-text-muted">
-                        {provider.name} · {model.description}
-                      </div>
-                    </div>
-                  </button>
-                );
-              })}
+              <section>
+                <div className="mb-2 text-xs font-medium text-text-muted">
+                  {t('modelParams.model')}
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  {modelGroups.map((group) => {
+                    const active = group.models.some((model) => model.id === selectedModel.id);
+                    const targetModel = group.models.find((model) => model.id === selectedModel.id)
+                      ?? group.models[0];
+                    return (
+                      <button
+                        key={group.name}
+                        className={`flex h-9 w-[120px] items-center justify-center rounded-lg border px-3 text-center text-xs transition-colors ${active
+                          ? 'border-accent/50 bg-accent/15 text-text-dark'
+                          : 'border-[rgba(255,255,255,0.12)] bg-bg-dark/65 text-text-muted hover:border-[rgba(255,255,255,0.2)]'
+                          }`}
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          onModelChange(targetModel.id);
+                          setOpenPanel(null);
+                        }}
+                      >
+                        <span className="truncate">{group.name}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </section>
             </div>
           </UiPanel>
         </div>,
@@ -405,6 +529,43 @@ export const ModelParamsControls = memo(({
             </div>
           </UiPanel>
         </div>,
+        document.body
+      )}
+
+      {typeof document !== 'undefined' && createPortal(
+        <UiModal
+          isOpen={Boolean(missingKeyProviderName)}
+          title={t('modelParams.providerKeyRequiredTitle')}
+          onClose={() => setMissingKeyProviderName(null)}
+          widthClassName="w-[420px]"
+          containerClassName="z-[120]"
+          footer={(
+            <>
+              <UiButton
+                variant="muted"
+                size="sm"
+                onClick={() => setMissingKeyProviderName(null)}
+              >
+                {t('common.cancel')}
+              </UiButton>
+              <UiButton
+                variant="primary"
+                size="sm"
+                onClick={() => {
+                  setMissingKeyProviderName(null);
+                  setOpenPanel(null);
+                  openSettingsDialog({ category: 'providers' });
+                }}
+              >
+                {t('modelParams.goConfigure')}
+              </UiButton>
+            </>
+          )}
+        >
+          <p className="text-sm text-text-muted">
+            {t('modelParams.providerKeyRequiredDesc', { provider: missingKeyProviderName ?? '' })}
+          </p>
+        </UiModal>,
         document.body
       )}
     </div>

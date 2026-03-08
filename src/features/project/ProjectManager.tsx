@@ -1,15 +1,21 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Plus, FolderOpen, Pencil, Trash2 } from 'lucide-react';
 import { useProjectStore } from '@/stores/projectStore';
 import { UI_CONTENT_OVERLAY_INSET_CLASS } from '@/components/ui/motion';
+import { UiSelect } from '@/components/ui/primitives';
 import { RenameDialog } from './RenameDialog';
+
+type ProjectSortField = 'name' | 'createdAt' | 'updatedAt';
+type SortDirection = 'asc' | 'desc';
 
 export function ProjectManager() {
   const { t } = useTranslation();
   const [showRenameDialog, setShowRenameDialog] = useState(false);
   const [editingProjectId, setEditingProjectId] = useState<string | null>(null);
   const [editingProjectName, setEditingProjectName] = useState('');
+  const [sortField, setSortField] = useState<ProjectSortField>('createdAt');
+  const [sortDirection, setSortDirection] = useState<SortDirection>('desc');
 
   const { projects, isOpeningProject, createProject, deleteProject, renameProject, openProject } =
     useProjectStore();
@@ -44,11 +50,51 @@ export function ProjectManager() {
     return new Date(timestamp).toLocaleDateString();
   };
 
+  const sortedProjects = useMemo(() => {
+    const list = [...projects];
+    const direction = sortDirection === 'asc' ? 1 : -1;
+
+    list.sort((a, b) => {
+      if (sortField === 'name') {
+        return a.name.localeCompare(b.name, 'zh-Hans-CN', { sensitivity: 'base' }) * direction;
+      }
+
+      const left = sortField === 'createdAt' ? a.createdAt : a.updatedAt;
+      const right = sortField === 'createdAt' ? b.createdAt : b.updatedAt;
+      return (left - right) * direction;
+    });
+
+    return list;
+  }, [projects, sortDirection, sortField]);
+
   return (
     <div className="ui-scrollbar h-full w-full overflow-auto p-8">
       <div className="max-w-5xl mx-auto">
         <div className="flex items-center justify-between mb-8">
-          <h1 className="text-2xl font-bold text-text-dark">{t('project.title')}</h1>
+          <div className="flex items-center gap-3">
+            <h1 className="text-2xl font-bold text-text-dark">{t('project.title')}</h1>
+            <div className="flex items-center gap-2">
+              <UiSelect
+                aria-label={t('project.sortBy')}
+                value={sortField}
+                onChange={(event) => setSortField(event.target.value as ProjectSortField)}
+                className="h-9 w-[100px] rounded-lg text-sm"
+              >
+                <option value="name">{t('project.sortByName')}</option>
+                <option value="createdAt">{t('project.sortByCreatedAt')}</option>
+                <option value="updatedAt">{t('project.sortByUpdatedAt')}</option>
+              </UiSelect>
+              <UiSelect
+                aria-label={t('project.sortDirection')}
+                value={sortDirection}
+                onChange={(event) => setSortDirection(event.target.value as SortDirection)}
+                className="h-9 w-[60px] rounded-lg text-sm"
+              >
+                <option value="asc">{t('project.sortAsc')}</option>
+                <option value="desc">{t('project.sortDesc')}</option>
+              </UiSelect>
+            </div>
+          </div>
           <button
             type="button"
             onClick={handleCreateProject}
@@ -67,7 +113,7 @@ export function ProjectManager() {
           </div>
         ) : (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-            {projects.map((project) => (
+            {sortedProjects.map((project) => (
               <div
                 key={project.id}
                 onClick={() => openProject(project.id)}
@@ -98,10 +144,10 @@ export function ProjectManager() {
                 </div>
                 <div className="text-xs text-text-muted">
                   <p>
-                    {t('project.nodes')}: {project.nodeCount}
+                    {t('project.modified')}: {formatDate(project.updatedAt)}
                   </p>
                   <p>
-                    {t('project.updatedAt')}: {formatDate(project.updatedAt)}
+                    {t('project.created')}: {formatDate(project.createdAt)}
                   </p>
                 </div>
               </div>

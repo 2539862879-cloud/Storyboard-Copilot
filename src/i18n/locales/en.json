@@ -65,9 +65,15 @@
     "storyboardLine": "Storyboard {{index}}: {{content}}"
   },
   "modelParams": {
+    "provider": "Provider",
+    "model": "Model",
+    "providerKeyRequiredTitle": "Provider API key required",
+    "providerKeyRequiredDesc": "{{provider}} is not configured yet. Please add its API key in Settings before using it.",
+    "goConfigure": "Go configure",
     "autoAspectRatio": "Auto",
     "quality": "Quality",
-    "aspectRatio": "Aspect Ratio"
+    "aspectRatio": "Aspect Ratio",
+    "enableWebSearch": "Enable web search"
   },
   "node": {
     "menu": {
@@ -148,6 +154,13 @@
     "created": "Created",
     "modified": "Modified",
     "updatedAt": "Updated",
+    "sortBy": "Sort by",
+    "sortDirection": "Sort order",
+    "sortByName": "Name",
+    "sortByCreatedAt": "Creation date",
+    "sortByUpdatedAt": "Modified date",
+    "sortAsc": "Ascending",
+    "sortDesc": "Descending",
     "nodes": "Nodes",
     "noProjects": "No Projects",
     "empty": "No Projects",
@@ -157,6 +170,8 @@
     "title": "Settings",
     "providers": "API Key",
     "providersDesc": "Configure AI provider API keys",
+    "providerGuideText": "Different providers vary in model capability, queue speed, stability, and pricing. Switch providers based on your task, and follow each provider's recommended parameters.",
+    "doNotShowAgain": "Do not show again",
     "appearance": "Appearance",
     "appearanceDesc": "Customize app appearance",
     "about": "About",
@@ -166,6 +181,8 @@
     "apiKey": "API Key",
     "model": "Model",
     "enterApiKey": "Enter API Key",
+    "nanoBananaProModel": "Nano Banana Pro Model",
+    "nanoBananaProModelDesc": "Switch the Nano Banana Pro endpoint for this provider. If one endpoint fails, try another one. See the <modelListLink>model list</modelListLink> for details.",
     "addProvider": "Add Provider",
     "providerPpioName": "PPIO",
     "comingSoon": "Coming soon...",
@@ -204,5 +221,12 @@
     "aboutAuthorLabel": "Author",
     "aboutAuthor": "痕继痕迹",
     "aboutRepositoryLabel": "Repository"
+  },
+  "update": {
+    "dialogTitle": "Update Available",
+    "dialogDescription": "A new version is available. Do you want to download it now?",
+    "goToQuarkDownload": "Quark Download",
+    "goToGithubDownload": "GitHub Releases",
+    "versionLine": "Current: {{currentVersion}}, Latest: {{latestVersion}}"
   }
 }

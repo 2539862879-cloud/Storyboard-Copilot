@@ -65,9 +65,15 @@
     "storyboardLine": "分镜 {{index}}：{{content}}"
   },
   "modelParams": {
+    "provider": "供应商",
+    "model": "模型",
+    "providerKeyRequiredTitle": "需要配置供应商密钥",
+    "providerKeyRequiredDesc": "当前尚未配置 {{provider}} 的 API Key，请先到设置中完成配置后再使用该供应商。",
+    "goConfigure": "去配置",
     "autoAspectRatio": "自动",
     "quality": "画质",
-    "aspectRatio": "比例"
+    "aspectRatio": "比例",
+    "enableWebSearch": "启用联网搜索"
   },
   "node": {
     "menu": {
@@ -148,6 +154,13 @@
     "created": "创建时间",
     "modified": "修改时间",
     "updatedAt": "更新时间",
+    "sortBy": "排序字段",
+    "sortDirection": "排序顺序",
+    "sortByName": "按名称",
+    "sortByCreatedAt": "按创建日期",
+    "sortByUpdatedAt": "按修改日期",
+    "sortAsc": "升序",
+    "sortDesc": "降序",
     "nodes": "节点数",
     "noProjects": "暂无项目",
     "empty": "暂无项目",
@@ -157,6 +170,8 @@
     "title": "设置",
     "providers": "密钥",
     "providersDesc": "配置 AI 服务商的 API 密钥",
+    "providerGuideText": "不同供应商在模型能力、队列速度、稳定性和价格上可能有差异。建议按当前任务场景切换供应商，并优先使用对应官方文档中的推荐参数。",
+    "doNotShowAgain": "不再显示",
     "appearance": "外观",
     "appearanceDesc": "自定义应用外观",
     "about": "关于",
@@ -166,6 +181,8 @@
     "apiKey": "API Key",
     "model": "模型",
     "enterApiKey": "输入 API Key",
+    "nanoBananaProModel": "Nano Banana Pro 接入模型",
+    "nanoBananaProModelDesc": "切换该供应商 Nano Banana Pro 的接入点，当一个接入点失效时可尝试切换，具体请查阅<modelListLink>模型列表</modelListLink>。",
     "addProvider": "添加供应商",
     "providerPpioName": "派欧云",
     "comingSoon": "即将推出...",
@@ -204,5 +221,12 @@
     "aboutAuthorLabel": "作者",
     "aboutAuthor": "痕继痕迹",
     "aboutRepositoryLabel": "项目仓库"
+  },
+  "update": {
+    "dialogTitle": "发现新版本",
+    "dialogDescription": "检测到软件有新版本，是否前往下载？",
+    "goToQuarkDownload": "前往网盘下载",
+    "goToGithubDownload": "去 GitHub 下载",
+    "versionLine": "当前版本：{{currentVersion}}，最新版本：{{latestVersion}}"
   }
 }

@@ -4,10 +4,16 @@ import { invoke } from '@tauri-apps/api/core';
 import { Canvas } from './features/canvas/Canvas';
 import { TitleBar } from './components/TitleBar';
 import { SettingsDialog } from './components/SettingsDialog';
+import { UpdateAvailableDialog } from './components/UpdateAvailableDialog';
 import { ProjectManager } from './features/project/ProjectManager';
 import { useThemeStore } from './stores/themeStore';
 import { useProjectStore } from './stores/projectStore';
 import { useSettingsStore } from './stores/settingsStore';
+import { checkForUpdateOncePerDay } from './features/update/application/checkForUpdate';
+import {
+  subscribeOpenSettingsDialog,
+  type SettingsCategory,
+} from './features/settings/settingsEvents';
 
 function toRgbCssValue(hexColor: string): string {
   const hex = hexColor.replace('#', '');
@@ -26,6 +32,10 @@ function App() {
   const themeTonePreset = useSettingsStore((state) => state.themeTonePreset);
   const accentColor = useSettingsStore((state) => state.accentColor);
   const [showSettings, setShowSettings] = useState(false);
+  const [settingsInitialCategory, setSettingsInitialCategory] = useState<SettingsCategory>('general');
+  const [showUpdateDialog, setShowUpdateDialog] = useState(false);
+  const [latestVersion, setLatestVersion] = useState<string>('');
+  const [currentVersion, setCurrentVersion] = useState<string>('');
 
   const isHydrated = useProjectStore((state) => state.isHydrated);
   const hydrate = useProjectStore((state) => state.hydrate);
@@ -67,6 +77,14 @@ function App() {
   }, [hydrate]);
 
   useEffect(() => {
+    const unsubscribe = subscribeOpenSettingsDialog(({ category }) => {
+      setSettingsInitialCategory(category ?? 'general');
+      setShowSettings(true);
+    });
+    return unsubscribe;
+  }, []);
+
+  useEffect(() => {
     if (!isHydrated) {
       return;
     }
@@ -100,6 +118,27 @@ function App() {
     void notifyFrontendReady();
   }, [isHydrated]);
 
+  useEffect(() => {
+    if (!isHydrated) {
+      return;
+    }
+
+    let cancelled = false;
+    const runUpdateCheck = async () => {
+      const result = await checkForUpdateOncePerDay();
+      if (!cancelled && result.hasUpdate) {
+        setLatestVersion(result.latestVersion ?? '');
+        setCurrentVersion(result.currentVersion ?? '');
+        setShowUpdateDialog(true);
+      }
+    };
+
+    void runUpdateCheck();
+    return () => {
+      cancelled = true;
+    };
+  }, [isHydrated]);
+
   if (!isHydrated) {
     return (
       <ReactFlowProvider>
@@ -112,7 +151,10 @@ function App() {
     <ReactFlowProvider>
       <div className="w-full h-full flex flex-col bg-bg-dark">
         <TitleBar
-          onSettingsClick={() => setShowSettings(true)}
+          onSettingsClick={() => {
+            setSettingsInitialCategory('general');
+            setShowSettings(true);
+          }}
           showBackButton={!!currentProjectId}
           onBackClick={closeProject}
         />
@@ -124,6 +166,13 @@ function App() {
         <SettingsDialog
           isOpen={showSettings}
           onClose={() => setShowSettings(false)}
+          initialCategory={settingsInitialCategory}
+        />
+        <UpdateAvailableDialog
+          isOpen={showUpdateDialog}
+          onClose={() => setShowUpdateDialog(false)}
+          latestVersion={latestVersion}
+          currentVersion={currentVersion}
         />
       </div>
     </ReactFlowProvider>

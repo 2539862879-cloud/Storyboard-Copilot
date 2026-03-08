@@ -1,13 +1,21 @@
 import { generateImage, setApiKey } from '@/commands/ai';
-import { persistImageLocally } from '@/features/canvas/application/imageData';
+import { imageUrlToDataUrl, persistImageLocally } from '@/features/canvas/application/imageData';
 
 import type { AiGateway, GenerateImagePayload } from '../application/ports';
 
 export const tauriAiGateway: AiGateway = {
   setApiKey,
   generateImage: async (payload: GenerateImagePayload) => {
+    const isKieModel = payload.model.startsWith('kie/');
+    const isFalModel = payload.model.startsWith('fal/');
     const normalizedReferenceImages = payload.referenceImages
-      ? await Promise.all(payload.referenceImages.map(async (imageUrl) => await persistImageLocally(imageUrl)))
+      ? await Promise.all(
+        payload.referenceImages.map(async (imageUrl) =>
+          isKieModel || isFalModel
+            ? await imageUrlToDataUrl(imageUrl)
+            : await persistImageLocally(imageUrl)
+        )
+      )
       : undefined;
 
     return await generateImage({

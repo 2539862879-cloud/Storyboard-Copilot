@@ -46,7 +46,7 @@ Nano Banana绘画核心接口。
 
 | 参数 | 类型 | 必填 | 示例 | 描述 |
 | :--- | :--- | :--- | :--- | :--- |
-| **model** | `string` | 是 | `"nano-banana-fast"` | **支持的模型**: `nano-banana-fast`, `nano-banana`, `nano-banana-pro`, `nano-banana-pro-vt`, `nano-banana-pro-cl`, `nano-banana-pro-vip`, `nano-banana-pro-4k-vip` |
+| **model** | `string` | 是 | `"nano-banana-fast"` | **支持的模型**: `nano-banana-2`,`nano-banana-fast`, `nano-banana`, `nano-banana-pro`, `nano-banana-pro-vt`, `nano-banana-pro-cl`, `nano-banana-pro-vip`, `nano-banana-pro-4k-vip` |
 | **urls** | `array` | 否 | `["https://example.com/example.png"]` | 参考图URL或Base64 |
 | **prompt** | `string` | 是 | `"一只可爱的猫咪在草地上玩耍"` | 提示词 |
 | **aspectRatio** | `string` | 否 | `"auto"` | **支持的图像比例**: `auto`, `1:1`, `16:9`, `9:16`, `4:3`, `3:4`, `3:2`, `2:3`, `5:4`, `4:5`, `21:9` (默认： `auto`) |

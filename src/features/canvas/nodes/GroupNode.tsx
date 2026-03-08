@@ -13,6 +13,9 @@ type GroupNodeProps = {
   selected?: boolean;
 };
 
+const GROUP_NODE_BG_OPACITY = 0.3;
+const GROUP_NODE_BG_ACCENT_WEIGHT = 30;
+
 export const GroupNode = memo(({ id, data, selected }: GroupNodeProps) => {
   const updateNodeData = useCanvasStore((state) => state.updateNodeData);
   const resolvedTitle = useMemo(
@@ -22,11 +25,13 @@ export const GroupNode = memo(({ id, data, selected }: GroupNodeProps) => {
 
   return (
     <div
-      className={`group relative h-full w-full overflow-visible rounded-[18px] border bg-[rgba(255,255,255,0.03)] backdrop-blur-[1px] ${
-        selected
-          ? 'border-accent shadow-[0_0_0_1px_rgba(59,130,246,0.35)]'
-          : 'border-[rgba(255,255,255,0.26)]'
-      }`}
+      className={`group relative h-full w-full overflow-visible rounded-[18px] border ${selected
+        ? 'border-accent shadow-[0_0_0_1px_rgba(59,130,246,0.35)]'
+        : 'border-[rgba(255,255,255,0.26)]'
+        }`}
+      style={{
+        backgroundColor: `color-mix(in srgb, rgb(var(--accent-rgb) / ${GROUP_NODE_BG_OPACITY}) ${GROUP_NODE_BG_ACCENT_WEIGHT}%, black)`,
+      }}
     >
       <NodeHeader
         className={NODE_HEADER_FLOATING_POSITION_CLASS}
