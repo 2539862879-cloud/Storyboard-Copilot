@@ -1,16 +1,29 @@
 import { getVersion } from '@tauri-apps/api/app';
 
 const GITHUB_LATEST_RELEASE_API = 'https://api.github.com/repos/henjicc/Storyboard-Copilot/releases/latest';
-const DAILY_CHECK_KEY = 'storyboard:update-check:last-attempt-date';
+const VERSION_SUPPRESSION_STORAGE_KEY = 'storyboard:update-check:version-suppressions';
 
 export interface UpdateCheckResult {
   hasUpdate: boolean;
   latestVersion?: string;
   currentVersion?: string;
+  error?: 'network' | 'unknown';
 }
 
 interface GithubLatestReleaseResponse {
   tag_name?: string;
+}
+type VersionSuppressionMode = 'today' | 'forever';
+
+interface VersionSuppressionRecord {
+  mode: VersionSuppressionMode;
+  dayKey?: string;
+}
+
+type VersionSuppressionMap = Record<string, VersionSuppressionRecord>;
+
+function normalizeVersion(version: string): string {
+  return version.trim().replace(/^v/i, '');
 }
 
 function getLocalDateKey(now: Date): string {
@@ -20,8 +33,84 @@ function getLocalDateKey(now: Date): string {
   return `${year}-${month}-${day}`;
 }
 
-function normalizeVersion(version: string): string {
-  return version.trim().replace(/^v/i, '');
+function readVersionSuppressions(): VersionSuppressionMap {
+  try {
+    const raw = localStorage.getItem(VERSION_SUPPRESSION_STORAGE_KEY);
+    if (!raw) {
+      return {};
+    }
+    const parsed = JSON.parse(raw) as unknown;
+    if (!parsed || typeof parsed !== 'object') {
+      return {};
+    }
+
+    return Object.entries(parsed as Record<string, unknown>).reduce<VersionSuppressionMap>(
+      (acc, [version, value]) => {
+        if (!version || typeof value !== 'object' || value === null) {
+          return acc;
+        }
+        const mode = (value as { mode?: unknown }).mode;
+        if (mode !== 'today' && mode !== 'forever') {
+          return acc;
+        }
+        const dayKey = (value as { dayKey?: unknown }).dayKey;
+        acc[version] = {
+          mode,
+          dayKey: typeof dayKey === 'string' ? dayKey : undefined,
+        };
+        return acc;
+      },
+      {}
+    );
+  } catch {
+    return {};
+  }
+}
+
+function writeVersionSuppressions(map: VersionSuppressionMap): void {
+  try {
+    localStorage.setItem(VERSION_SUPPRESSION_STORAGE_KEY, JSON.stringify(map));
+  } catch {
+    // ignore storage failures
+  }
+}
+
+export function suppressUpdateVersion(version: string, mode: VersionSuppressionMode): void {
+  const normalized = normalizeVersion(version);
+  if (!normalized) {
+    return;
+  }
+
+  const map = readVersionSuppressions();
+  map[normalized] =
+    mode === 'today'
+      ? {
+          mode: 'today',
+          dayKey: getLocalDateKey(new Date()),
+        }
+      : { mode: 'forever' };
+
+  writeVersionSuppressions(map);
+}
+
+export function isUpdateVersionSuppressed(version: string): boolean {
+  const normalized = normalizeVersion(version);
+  if (!normalized) {
+    return false;
+  }
+
+  const map = readVersionSuppressions();
+  const record = map[normalized];
+  if (!record) {
+    return false;
+  }
+
+  if (record.mode === 'forever') {
+    return true;
+  }
+
+  const today = getLocalDateKey(new Date());
+  return record.dayKey === today;
 }
 
 function parseVersionParts(version: string): number[] {
@@ -51,14 +140,8 @@ function compareVersions(left: string, right: string): number {
   return 0;
 }
 
-export async function checkForUpdateOncePerDay(): Promise<UpdateCheckResult> {
+export async function checkForUpdate(): Promise<UpdateCheckResult> {
   try {
-    const todayKey = getLocalDateKey(new Date());
-    if (localStorage.getItem(DAILY_CHECK_KEY) === todayKey) {
-      return { hasUpdate: false };
-    }
-    localStorage.setItem(DAILY_CHECK_KEY, todayKey);
-
     const currentVersion = normalizeVersion(await getVersion());
     if (!currentVersion) {
       return { hasUpdate: false };
@@ -78,7 +161,7 @@ export async function checkForUpdateOncePerDay(): Promise<UpdateCheckResult> {
       });
 
       if (!response.ok) {
-        return { hasUpdate: false };
+        return { hasUpdate: false, error: 'network' };
       }
 
       const data = (await response.json()) as GithubLatestReleaseResponse;
@@ -101,6 +184,6 @@ export async function checkForUpdateOncePerDay(): Promise<UpdateCheckResult> {
 
     return { hasUpdate: false };
   } catch {
-    return { hasUpdate: false };
+    return { hasUpdate: false, error: 'unknown' };
   }
 }

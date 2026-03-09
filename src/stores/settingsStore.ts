@@ -20,6 +20,8 @@ interface SettingsState {
   themeTonePreset: ThemeTonePreset;
   accentColor: string;
   canvasEdgeRoutingMode: CanvasEdgeRoutingMode;
+  autoCheckAppUpdateOnLaunch: boolean;
+  enableUpdateDialog: boolean;
   setProviderApiKey: (providerId: string, key: string) => void;
   setGrsaiNanoBananaProModel: (model: string) => void;
   setHideProviderGuidePopover: (hide: boolean) => void;
@@ -32,6 +34,8 @@ interface SettingsState {
   setThemeTonePreset: (preset: ThemeTonePreset) => void;
   setAccentColor: (color: string) => void;
   setCanvasEdgeRoutingMode: (mode: CanvasEdgeRoutingMode) => void;
+  setAutoCheckAppUpdateOnLaunch: (enabled: boolean) => void;
+  setEnableUpdateDialog: (enabled: boolean) => void;
 }
 
 const HEX_COLOR_PATTERN = /^#?[0-9a-fA-F]{6}$/;
@@ -96,6 +100,8 @@ export const useSettingsStore = create<SettingsState>()(
       themeTonePreset: 'neutral',
       accentColor: '#3B82F6',
       canvasEdgeRoutingMode: 'spline',
+      autoCheckAppUpdateOnLaunch: true,
+      enableUpdateDialog: true,
       setProviderApiKey: (providerId, key) =>
         set((state) => ({
           apiKeys: {
@@ -126,10 +132,12 @@ export const useSettingsStore = create<SettingsState>()(
       setAccentColor: (color) => set({ accentColor: normalizeHexColor(color) }),
       setCanvasEdgeRoutingMode: (canvasEdgeRoutingMode) =>
         set({ canvasEdgeRoutingMode: normalizeCanvasEdgeRoutingMode(canvasEdgeRoutingMode) }),
+      setAutoCheckAppUpdateOnLaunch: (enabled) => set({ autoCheckAppUpdateOnLaunch: enabled }),
+      setEnableUpdateDialog: (enabled) => set({ enableUpdateDialog: enabled }),
     }),
     {
       name: 'settings-storage',
-      version: 6,
+      version: 7,
       migrate: (persistedState: unknown) => {
         const state = (persistedState ?? {}) as {
           apiKey?: string;
@@ -138,6 +146,8 @@ export const useSettingsStore = create<SettingsState>()(
           grsaiNanoBananaProModel?: string;
           hideProviderGuidePopover?: boolean;
           canvasEdgeRoutingMode?: CanvasEdgeRoutingMode | string;
+          autoCheckAppUpdateOnLaunch?: boolean;
+          enableUpdateDialog?: boolean;
         };
 
         const migratedApiKeys = normalizeApiKeys(state.apiKeys);
@@ -153,6 +163,8 @@ export const useSettingsStore = create<SettingsState>()(
             ),
             hideProviderGuidePopover: state.hideProviderGuidePopover ?? false,
             canvasEdgeRoutingMode: normalizeCanvasEdgeRoutingMode(state.canvasEdgeRoutingMode),
+            autoCheckAppUpdateOnLaunch: state.autoCheckAppUpdateOnLaunch ?? true,
+            enableUpdateDialog: state.enableUpdateDialog ?? true,
           };
         }
 
@@ -165,6 +177,8 @@ export const useSettingsStore = create<SettingsState>()(
           ),
           hideProviderGuidePopover: state.hideProviderGuidePopover ?? false,
           canvasEdgeRoutingMode: normalizeCanvasEdgeRoutingMode(state.canvasEdgeRoutingMode),
+          autoCheckAppUpdateOnLaunch: state.autoCheckAppUpdateOnLaunch ?? true,
+          enableUpdateDialog: state.enableUpdateDialog ?? true,
         };
       },
     }

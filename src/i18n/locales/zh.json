@@ -229,14 +229,28 @@
     "aboutVersionUnknown": "未知",
     "aboutAuthorLabel": "作者",
     "aboutAuthor": "痕继痕迹",
-    "aboutRepositoryLabel": "项目仓库"
+    "aboutRepositoryLabel": "项目仓库",
+    "autoCheckUpdateOnLaunch": "启动时自动检查更新",
+    "autoCheckUpdateOnLaunchDesc": "每次打开软件自动检查一次新版本。",
+    "enableUpdateDialog": "启用更新提示弹窗",
+    "enableUpdateDialogDesc": "检测到新版本时显示更新提示弹窗。",
+    "checkUpdateNow": "立即检查更新",
+    "checkingUpdate": "正在检查更新...",
+    "checkUpdateHasUpdate": "检测到新版本。",
+    "checkUpdateUpToDate": "当前已是最新版本。",
+    "checkUpdateFailed": "检查更新失败，请稍后重试。"
   },
   "update": {
     "dialogTitle": "发现新版本",
     "dialogDescription": "检测到软件有新版本，是否前往下载？",
     "goToQuarkDownload": "前往网盘下载",
     "goToGithubDownload": "去 GitHub 下载",
-    "versionLine": "当前版本：{{currentVersion}}，最新版本：{{latestVersion}}"
+    "versionLine": "当前版本：{{currentVersion}}，最新版本：{{latestVersion}}",
+    "ignoreRule": "忽略提醒规则",
+    "ignoreTodayVersion": "今日不再提示该版本",
+    "ignoreThisVersionForever": "不再提示该版本",
+    "ignoreAllForever": "永远不再提示更新",
+    "applyIgnore": "应用忽略"
   },
   "errorDialog": {
     "detailsTitle": "错误详情"

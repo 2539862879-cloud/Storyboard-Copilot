@@ -51,10 +51,10 @@ function resolveButtonVariant(variant: ButtonVariant): string {
   }
 
   if (variant === 'ghost') {
-    return 'bg-transparent text-text-dark hover:bg-bg-dark/70';
+    return 'bg-transparent text-text-dark hover:bg-[rgba(15,23,42,0.08)] dark:hover:bg-bg-dark/70';
   }
 
-  return 'bg-bg-dark/80 text-text-dark hover:bg-bg-dark';
+  return 'bg-[rgba(15,23,42,0.08)] text-text-dark hover:bg-[rgba(15,23,42,0.14)] dark:bg-bg-dark/80 dark:hover:bg-bg-dark';
 }
 
 function resolveButtonSize(size: ButtonSize): string {
@@ -78,7 +78,7 @@ export function UiButton({
 export function UiIconButton({ className = '', active = false, ...props }: UiIconButtonProps) {
   return (
     <button
-      className={`inline-flex h-10 w-10 items-center justify-center border ui-field transition-colors ${active ? 'border-accent/45 bg-accent/18 text-text-dark' : 'text-text-muted hover:bg-bg-dark'} ${className}`}
+      className={`inline-flex h-10 w-10 items-center justify-center border ui-field transition-colors ${active ? 'border-accent/45 bg-accent/18 text-text-dark' : 'text-text-muted hover:bg-[rgba(15,23,42,0.08)] dark:hover:bg-bg-dark'} ${className}`}
       {...props}
     />
   );
@@ -88,7 +88,7 @@ export const UiChipButton = forwardRef<HTMLButtonElement, UiChipButtonProps>(
   ({ className = '', active = false, ...props }, ref) => (
     <button
       ref={ref}
-      className={`inline-flex h-10 items-center gap-2 border ui-field px-3 text-sm transition-colors ${active ? 'border-accent/45 bg-accent/15 text-text-dark' : 'text-text-dark hover:bg-bg-dark'} ${className}`}
+      className={`inline-flex h-10 items-center gap-2 border ui-field px-3 text-sm transition-colors ${active ? 'border-accent/45 bg-accent/15 text-text-dark' : 'text-text-dark hover:bg-[rgba(15,23,42,0.08)] dark:hover:bg-bg-dark'} ${className}`}
       {...props}
     />
   )

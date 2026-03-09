@@ -20,6 +20,7 @@ interface SettingsDialogProps {
   isOpen: boolean;
   onClose: () => void;
   initialCategory?: SettingsCategory;
+  onCheckUpdate?: () => Promise<'has-update' | 'up-to-date' | 'failed'>;
 }
 
 const PROVIDER_REGISTER_URLS: Record<string, string> = {
@@ -36,7 +37,12 @@ const PROVIDER_GET_KEY_URLS: Record<string, string> = {
   fal: 'https://fal.ai/dashboard/keys',
 };
 
-export function SettingsDialog({ isOpen, onClose, initialCategory = 'general' }: SettingsDialogProps) {
+export function SettingsDialog({
+  isOpen,
+  onClose,
+  initialCategory = 'general',
+  onCheckUpdate,
+}: SettingsDialogProps) {
   const { t, i18n } = useTranslation();
   const {
     apiKeys,
@@ -51,6 +57,8 @@ export function SettingsDialog({ isOpen, onClose, initialCategory = 'general' }:
     themeTonePreset,
     accentColor,
     canvasEdgeRoutingMode,
+    autoCheckAppUpdateOnLaunch,
+    enableUpdateDialog,
     setProviderApiKey,
     setGrsaiNanoBananaProModel,
     setDownloadPresetPaths,
@@ -62,6 +70,8 @@ export function SettingsDialog({ isOpen, onClose, initialCategory = 'general' }:
     setThemeTonePreset,
     setAccentColor,
     setCanvasEdgeRoutingMode,
+    setAutoCheckAppUpdateOnLaunch,
+    setEnableUpdateDialog,
   } = useSettingsStore();
   const providers = useMemo(() => {
     const providerOrder = ['ppio', 'fal', 'kie', 'grsai'];
@@ -94,6 +104,11 @@ export function SettingsDialog({ isOpen, onClose, initialCategory = 'general' }:
   const [localThemeTonePreset, setLocalThemeTonePreset] = useState(themeTonePreset);
   const [localAccentColor, setLocalAccentColor] = useState(accentColor);
   const [localCanvasEdgeRoutingMode, setLocalCanvasEdgeRoutingMode] = useState(canvasEdgeRoutingMode);
+  const [localAutoCheckAppUpdateOnLaunch, setLocalAutoCheckAppUpdateOnLaunch] = useState(
+    autoCheckAppUpdateOnLaunch
+  );
+  const [localEnableUpdateDialog, setLocalEnableUpdateDialog] = useState(enableUpdateDialog);
+  const [checkUpdateStatus, setCheckUpdateStatus] = useState<'' | 'checking' | 'has-update' | 'up-to-date' | 'failed'>('');
   const [revealedApiKeys, setRevealedApiKeys] = useState<Record<string, boolean>>({});
   const { shouldRender, isVisible } = useDialogTransition(isOpen, UI_DIALOG_TRANSITION_MS);
 
@@ -133,6 +148,9 @@ export function SettingsDialog({ isOpen, onClose, initialCategory = 'general' }:
     setLocalThemeTonePreset(themeTonePreset);
     setLocalAccentColor(accentColor);
     setLocalCanvasEdgeRoutingMode(canvasEdgeRoutingMode);
+    setLocalAutoCheckAppUpdateOnLaunch(autoCheckAppUpdateOnLaunch);
+    setLocalEnableUpdateDialog(enableUpdateDialog);
+    setCheckUpdateStatus('');
     setRevealedApiKeys({});
     setLocalDownloadPathInput('');
   }, [
@@ -148,6 +166,8 @@ export function SettingsDialog({ isOpen, onClose, initialCategory = 'general' }:
     themeTonePreset,
     accentColor,
     canvasEdgeRoutingMode,
+    autoCheckAppUpdateOnLaunch,
+    enableUpdateDialog,
     initialCategory,
   ]);
 
@@ -165,6 +185,8 @@ export function SettingsDialog({ isOpen, onClose, initialCategory = 'general' }:
     setThemeTonePreset(localThemeTonePreset);
     setAccentColor(localAccentColor);
     setCanvasEdgeRoutingMode(localCanvasEdgeRoutingMode);
+    setAutoCheckAppUpdateOnLaunch(localAutoCheckAppUpdateOnLaunch);
+    setEnableUpdateDialog(localEnableUpdateDialog);
     onClose();
   }, [
     localApiKeys,
@@ -178,6 +200,8 @@ export function SettingsDialog({ isOpen, onClose, initialCategory = 'general' }:
     localThemeTonePreset,
     localAccentColor,
     localCanvasEdgeRoutingMode,
+    localAutoCheckAppUpdateOnLaunch,
+    localEnableUpdateDialog,
     providers,
     setProviderApiKey,
     setGrsaiNanoBananaProModel,
@@ -190,8 +214,20 @@ export function SettingsDialog({ isOpen, onClose, initialCategory = 'general' }:
     setThemeTonePreset,
     setAccentColor,
     setCanvasEdgeRoutingMode,
+    setAutoCheckAppUpdateOnLaunch,
+    setEnableUpdateDialog,
     onClose,
   ]);
+
+  const handleCheckUpdate = useCallback(async () => {
+    if (!onCheckUpdate) {
+      return;
+    }
+
+    setCheckUpdateStatus('checking');
+    const status = await onCheckUpdate();
+    setCheckUpdateStatus(status);
+  }, [onCheckUpdate]);
 
   const handlePickDownloadPath = useCallback(async () => {
     try {
@@ -799,15 +835,78 @@ export function SettingsDialog({ isOpen, onClose, initialCategory = 'general' }:
                       </a>
                     </p>
                   </div>
+
+                  <div className="rounded-lg border border-border-dark bg-bg-dark p-4 space-y-3">
+                    <div className="flex items-start gap-3">
+                      <UiCheckbox
+                        checked={localAutoCheckAppUpdateOnLaunch}
+                        onCheckedChange={(checked) => setLocalAutoCheckAppUpdateOnLaunch(checked)}
+                        className="mt-0.5"
+                      />
+                      <div>
+                        <h3 className="text-sm font-medium text-text-dark">
+                          {t('settings.autoCheckUpdateOnLaunch')}
+                        </h3>
+                        <p className="mt-1 text-xs text-text-muted">
+                          {t('settings.autoCheckUpdateOnLaunchDesc')}
+                        </p>
+                      </div>
+                    </div>
+                    <div className="flex items-start gap-3">
+                      <UiCheckbox
+                        checked={localEnableUpdateDialog}
+                        onCheckedChange={(checked) => setLocalEnableUpdateDialog(checked)}
+                        className="mt-0.5"
+                      />
+                      <div>
+                        <h3 className="text-sm font-medium text-text-dark">
+                          {t('settings.enableUpdateDialog')}
+                        </h3>
+                        <p className="mt-1 text-xs text-text-muted">
+                          {t('settings.enableUpdateDialogDesc')}
+                        </p>
+                      </div>
+                    </div>
+                    <div className="pt-1">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          void handleCheckUpdate();
+                        }}
+                        className="rounded border border-border-dark bg-surface-dark px-3 py-2 text-sm text-text-dark transition-colors hover:bg-bg-dark disabled:cursor-not-allowed disabled:opacity-50"
+                        disabled={checkUpdateStatus === 'checking'}
+                      >
+                        {checkUpdateStatus === 'checking'
+                          ? t('settings.checkingUpdate')
+                          : t('settings.checkUpdateNow')}
+                      </button>
+                      {checkUpdateStatus !== '' && (
+                        <p className="mt-2 text-xs text-text-muted">
+                          {checkUpdateStatus === 'has-update' && t('settings.checkUpdateHasUpdate')}
+                          {checkUpdateStatus === 'up-to-date' && t('settings.checkUpdateUpToDate')}
+                          {checkUpdateStatus === 'failed' && t('settings.checkUpdateFailed')}
+                          {checkUpdateStatus === 'checking' && t('settings.checkingUpdate')}
+                        </p>
+                      )}
+                    </div>
+                  </div>
                 </div>
 
                 <div className="flex justify-end border-t border-border-dark px-6 py-4">
-                  <button
-                    onClick={onClose}
-                    className="rounded bg-accent px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-accent/80"
-                  >
-                    {t('common.close')}
-                  </button>
+                  <div className="flex gap-2">
+                    <button
+                      onClick={onClose}
+                      className="rounded border border-border-dark px-4 py-2 text-sm font-medium text-text-dark transition-colors hover:bg-bg-dark"
+                    >
+                      {t('common.close')}
+                    </button>
+                    <button
+                      onClick={handleSave}
+                      className="rounded bg-accent px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-accent/80"
+                    >
+                      {t('common.save')}
+                    </button>
+                  </div>
                 </div>
               </>
             )}

@@ -4,13 +4,17 @@ import { invoke } from '@tauri-apps/api/core';
 import { Canvas } from './features/canvas/Canvas';
 import { TitleBar } from './components/TitleBar';
 import { SettingsDialog } from './components/SettingsDialog';
-import { UpdateAvailableDialog } from './components/UpdateAvailableDialog';
+import { UpdateAvailableDialog, type UpdateIgnoreMode } from './components/UpdateAvailableDialog';
 import { GlobalErrorDialog } from './components/GlobalErrorDialog';
 import { ProjectManager } from './features/project/ProjectManager';
 import { useThemeStore } from './stores/themeStore';
 import { useProjectStore } from './stores/projectStore';
 import { useSettingsStore } from './stores/settingsStore';
-import { checkForUpdateOncePerDay } from './features/update/application/checkForUpdate';
+import {
+  checkForUpdate,
+  isUpdateVersionSuppressed,
+  suppressUpdateVersion,
+} from './features/update/application/checkForUpdate';
 import {
   subscribeOpenGlobalErrorDialog,
   type GlobalErrorDialogDetail,
@@ -36,6 +40,9 @@ function App() {
   const uiRadiusPreset = useSettingsStore((state) => state.uiRadiusPreset);
   const themeTonePreset = useSettingsStore((state) => state.themeTonePreset);
   const accentColor = useSettingsStore((state) => state.accentColor);
+  const autoCheckAppUpdateOnLaunch = useSettingsStore((state) => state.autoCheckAppUpdateOnLaunch);
+  const enableUpdateDialog = useSettingsStore((state) => state.enableUpdateDialog);
+  const setEnableUpdateDialog = useSettingsStore((state) => state.setEnableUpdateDialog);
   const [showSettings, setShowSettings] = useState(false);
   const [settingsInitialCategory, setSettingsInitialCategory] = useState<SettingsCategory>('general');
   const [showUpdateDialog, setShowUpdateDialog] = useState(false);
@@ -138,8 +145,14 @@ function App() {
 
     let cancelled = false;
     const runUpdateCheck = async () => {
-      const result = await checkForUpdateOncePerDay();
-      if (!cancelled && result.hasUpdate) {
+      if (!autoCheckAppUpdateOnLaunch) {
+        return;
+      }
+      const result = await checkForUpdate();
+      if (!cancelled && result.hasUpdate && result.latestVersion && enableUpdateDialog) {
+        if (isUpdateVersionSuppressed(result.latestVersion)) {
+          return;
+        }
         setLatestVersion(result.latestVersion ?? '');
         setCurrentVersion(result.currentVersion ?? '');
         setShowUpdateDialog(true);
@@ -150,7 +163,36 @@ function App() {
     return () => {
       cancelled = true;
     };
-  }, [isHydrated]);
+  }, [isHydrated, autoCheckAppUpdateOnLaunch, enableUpdateDialog]);
+
+  const handleManualCheckUpdate = async (): Promise<'has-update' | 'up-to-date' | 'failed'> => {
+    const result = await checkForUpdate();
+    if (!result.hasUpdate) {
+      return result.error ? 'failed' : 'up-to-date';
+    }
+
+    setLatestVersion(result.latestVersion ?? '');
+    setCurrentVersion(result.currentVersion ?? '');
+
+    if (enableUpdateDialog) {
+      setShowUpdateDialog(true);
+    }
+
+    return 'has-update';
+  };
+
+  const handleApplyIgnore = (mode: UpdateIgnoreMode) => {
+    if (mode === 'forever-all') {
+      setEnableUpdateDialog(false);
+      return;
+    }
+
+    if (!latestVersion) {
+      return;
+    }
+
+    suppressUpdateVersion(latestVersion, mode === 'today-version' ? 'today' : 'forever');
+  };
 
   if (!isHydrated) {
     return (
@@ -180,12 +222,14 @@ function App() {
           isOpen={showSettings}
           onClose={() => setShowSettings(false)}
           initialCategory={settingsInitialCategory}
+          onCheckUpdate={handleManualCheckUpdate}
         />
         <UpdateAvailableDialog
           isOpen={showUpdateDialog}
           onClose={() => setShowUpdateDialog(false)}
           latestVersion={latestVersion}
           currentVersion={currentVersion}
+          onApplyIgnore={handleApplyIgnore}
         />
         <GlobalErrorDialog
           isOpen={Boolean(globalError)}

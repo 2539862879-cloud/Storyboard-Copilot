@@ -13,9 +13,6 @@ type GroupNodeProps = {
   selected?: boolean;
 };
 
-const GROUP_NODE_BG_OPACITY = 0.3;
-const GROUP_NODE_BG_ACCENT_WEIGHT = 30;
-
 export const GroupNode = memo(({ id, data, selected }: GroupNodeProps) => {
   const updateNodeData = useCanvasStore((state) => state.updateNodeData);
   const resolvedTitle = useMemo(
@@ -27,10 +24,10 @@ export const GroupNode = memo(({ id, data, selected }: GroupNodeProps) => {
     <div
       className={`group relative h-full w-full overflow-visible rounded-[18px] border ${selected
         ? 'border-accent shadow-[0_0_0_1px_rgba(59,130,246,0.35)]'
-        : 'border-[rgba(255,255,255,0.26)]'
+        : 'border-[rgba(15,23,42,0.2)] dark:border-[rgba(255,255,255,0.26)]'
         }`}
       style={{
-        backgroundColor: `color-mix(in srgb, rgb(var(--accent-rgb) / ${GROUP_NODE_BG_OPACITY}) ${GROUP_NODE_BG_ACCENT_WEIGHT}%, black)`,
+        backgroundColor: 'var(--group-node-bg)',
       }}
     >
       <NodeHeader

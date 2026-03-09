@@ -229,14 +229,28 @@
     "aboutVersionUnknown": "Unknown",
     "aboutAuthorLabel": "Author",
     "aboutAuthor": "痕继痕迹",
-    "aboutRepositoryLabel": "Repository"
+    "aboutRepositoryLabel": "Repository",
+    "autoCheckUpdateOnLaunch": "Auto check updates on launch",
+    "autoCheckUpdateOnLaunchDesc": "Check for updates once every time the app starts.",
+    "enableUpdateDialog": "Enable update dialog",
+    "enableUpdateDialogDesc": "Show a custom dialog when a new version is detected.",
+    "checkUpdateNow": "Check for updates now",
+    "checkingUpdate": "Checking for updates...",
+    "checkUpdateHasUpdate": "New version detected.",
+    "checkUpdateUpToDate": "You are on the latest version.",
+    "checkUpdateFailed": "Update check failed. Please try again later."
   },
   "update": {
     "dialogTitle": "Update Available",
     "dialogDescription": "A new version is available. Do you want to download it now?",
     "goToQuarkDownload": "Quark Download",
     "goToGithubDownload": "GitHub Releases",
-    "versionLine": "Current: {{currentVersion}}, Latest: {{latestVersion}}"
+    "versionLine": "Current: {{currentVersion}}, Latest: {{latestVersion}}",
+    "ignoreRule": "Ignore reminder rule",
+    "ignoreTodayVersion": "Do not remind this version today",
+    "ignoreThisVersionForever": "Never remind this version",
+    "ignoreAllForever": "Never remind updates",
+    "applyIgnore": "Apply ignore"
   },
   "errorDialog": {
     "detailsTitle": "Error details"
