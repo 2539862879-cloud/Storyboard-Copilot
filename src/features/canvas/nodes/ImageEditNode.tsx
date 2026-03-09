@@ -27,7 +27,7 @@ import {
   canvasAiGateway,
   graphImageResolver,
 } from '@/features/canvas/application/canvasServices';
-import { showErrorDialog } from '@/features/canvas/application/errorDialog';
+import { resolveErrorContent, showErrorDialog } from '@/features/canvas/application/errorDialog';
 import {
   detectAspectRatio,
   parseAspectRatio,
@@ -462,10 +462,9 @@ export const ImageEditNode = memo(({ id, data, selected, width, height }: ImageE
         generationStartedAt: null,
       });
     } catch (generationError) {
-      const errorMessage =
-        generationError instanceof Error ? generationError.message : t('ai.error');
-      setError(errorMessage);
-      void showErrorDialog(errorMessage, t('common.error'));
+      const resolvedError = resolveErrorContent(generationError, t('ai.error'));
+      setError(resolvedError.message);
+      void showErrorDialog(resolvedError.message, t('common.error'), resolvedError.details);
       updateNodeData(newNodeId, {
         isGenerating: false,
         generationStartedAt: null,

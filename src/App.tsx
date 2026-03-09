@@ -5,11 +5,16 @@ import { Canvas } from './features/canvas/Canvas';
 import { TitleBar } from './components/TitleBar';
 import { SettingsDialog } from './components/SettingsDialog';
 import { UpdateAvailableDialog } from './components/UpdateAvailableDialog';
+import { GlobalErrorDialog } from './components/GlobalErrorDialog';
 import { ProjectManager } from './features/project/ProjectManager';
 import { useThemeStore } from './stores/themeStore';
 import { useProjectStore } from './stores/projectStore';
 import { useSettingsStore } from './stores/settingsStore';
 import { checkForUpdateOncePerDay } from './features/update/application/checkForUpdate';
+import {
+  subscribeOpenGlobalErrorDialog,
+  type GlobalErrorDialogDetail,
+} from './features/app/errorDialogEvents';
 import {
   subscribeOpenSettingsDialog,
   type SettingsCategory,
@@ -36,6 +41,7 @@ function App() {
   const [showUpdateDialog, setShowUpdateDialog] = useState(false);
   const [latestVersion, setLatestVersion] = useState<string>('');
   const [currentVersion, setCurrentVersion] = useState<string>('');
+  const [globalError, setGlobalError] = useState<GlobalErrorDialogDetail | null>(null);
 
   const isHydrated = useProjectStore((state) => state.isHydrated);
   const hydrate = useProjectStore((state) => state.hydrate);
@@ -75,6 +81,13 @@ function App() {
   useEffect(() => {
     void hydrate();
   }, [hydrate]);
+
+  useEffect(() => {
+    const unsubscribe = subscribeOpenGlobalErrorDialog((detail) => {
+      setGlobalError(detail);
+    });
+    return unsubscribe;
+  }, []);
 
   useEffect(() => {
     const unsubscribe = subscribeOpenSettingsDialog(({ category }) => {
@@ -173,6 +186,13 @@ function App() {
           onClose={() => setShowUpdateDialog(false)}
           latestVersion={latestVersion}
           currentVersion={currentVersion}
+        />
+        <GlobalErrorDialog
+          isOpen={Boolean(globalError)}
+          title={globalError?.title ?? ''}
+          message={globalError?.message ?? ''}
+          details={globalError?.details}
+          onClose={() => setGlobalError(null)}
         />
       </div>
     </ReactFlowProvider>

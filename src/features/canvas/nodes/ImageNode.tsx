@@ -95,6 +95,27 @@ export const ImageNode = memo(({ id, data, selected, type, width, height }: Imag
     return Math.min(elapsed / duration, 0.96);
   }, [generationDurationMs, generationStartedAt, isGenerating, now]);
 
+  const waitedMinutes = useMemo(() => {
+    if (!isGenerating || generationStartedAt === null) {
+      return 0;
+    }
+
+    const elapsed = Math.max(0, now - generationStartedAt);
+    return Math.floor(elapsed / 60000);
+  }, [generationStartedAt, isGenerating, now]);
+
+  const waitingResultText = useMemo(() => {
+    if (!isExportResultNode) {
+      return t('node.imageNode.selectToEdit');
+    }
+
+    if (!isGenerating || waitedMinutes < 2) {
+      return t('node.imageNode.waitingResult');
+    }
+
+    return t('node.imageNode.waitingResultDelayed', { minutes: waitedMinutes });
+  }, [isExportResultNode, isGenerating, t, waitedMinutes]);
+
   const imageSource = useMemo(() => {
     const preferOriginal = shouldUseOriginalImageByZoom(zoom);
     const picked = preferOriginal
@@ -149,7 +170,7 @@ export const ImageNode = memo(({ id, data, selected, type, width, height }: Imag
               <Sparkles className="h-7 w-7 opacity-60" />
             )}
             <span className="px-4 text-center text-[12px] leading-6">
-              {isExportResultNode ? t('node.imageNode.waitingResult') : t('node.imageNode.selectToEdit')}
+              {waitingResultText}
             </span>
           </div>
         )}

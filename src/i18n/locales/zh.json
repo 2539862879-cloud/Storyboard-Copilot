@@ -95,6 +95,7 @@
       "resultAlt": "结果图",
       "generatedAlt": "生成图",
       "waitingResult": "等待输出结果图片",
+      "waitingResultDelayed": "已经等待 {{minutes}} 分钟了，还没有结果。继续等待中...",
       "selectToEdit": "选中后在下方输入提示词生成或编辑图片"
     },
     "imageEdit": {
@@ -196,6 +197,11 @@
     "toneNeutral": "中性",
     "toneWarm": "暖色",
     "toneCool": "冷色",
+    "edgeRoutingMode": "连线样式",
+    "edgeRoutingModeDesc": "切换节点间连线路径风格，可选择自动避让节点的直角走线。",
+    "edgeRoutingSpline": "曲线",
+    "edgeRoutingOrthogonal": "直角",
+    "edgeRoutingSmartOrthogonal": "智能避让（直角）",
     "accentColor": "强调色",
     "accentColorDesc": "用于按钮、选中边框和交互高亮。",
     "resetAccentColor": "恢复默认",
@@ -213,6 +219,9 @@
     "addPath": "添加路径",
     "chooseFolder": "选择文件夹",
     "noDownloadPresetPaths": "暂无预设路径",
+    "providerApiKeyGuidePrefix": "首先",
+    "providerRegisterLink": "点击这里注册",
+    "providerApiKeyGuideMiddle": "，然后",
     "getApiKeyLink": "点击这里获取密钥",
     "aboutAppName": "分镜助手",
     "aboutIntro": "基于节点画布的 AI 分镜工作台，一站式完成图片生成、编辑与分镜流程。",
@@ -228,5 +237,9 @@
     "goToQuarkDownload": "前往网盘下载",
     "goToGithubDownload": "去 GitHub 下载",
     "versionLine": "当前版本：{{currentVersion}}，最新版本：{{latestVersion}}"
+  },
+  "errorDialog": {
+    "detailsTitle": "错误详情"
   }
 }
+

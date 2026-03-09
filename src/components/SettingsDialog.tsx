@@ -22,6 +22,20 @@ interface SettingsDialogProps {
   initialCategory?: SettingsCategory;
 }
 
+const PROVIDER_REGISTER_URLS: Record<string, string> = {
+  ppio: 'https://ppio.com/user/register?invited_by=WGY0DZ',
+  grsai: 'https://grsai.com',
+  kie: 'https://kie.ai',
+  fal: 'https://fal.ai',
+};
+
+const PROVIDER_GET_KEY_URLS: Record<string, string> = {
+  ppio: 'https://ppio.com/settings/key-management',
+  grsai: 'https://grsai.com/zh/dashboard/api-keys',
+  kie: 'https://kie.ai/api-key',
+  fal: 'https://fal.ai/dashboard/keys',
+};
+
 export function SettingsDialog({ isOpen, onClose, initialCategory = 'general' }: SettingsDialogProps) {
   const { t, i18n } = useTranslation();
   const {
@@ -36,6 +50,7 @@ export function SettingsDialog({ isOpen, onClose, initialCategory = 'general' }:
     uiRadiusPreset,
     themeTonePreset,
     accentColor,
+    canvasEdgeRoutingMode,
     setProviderApiKey,
     setGrsaiNanoBananaProModel,
     setDownloadPresetPaths,
@@ -46,6 +61,7 @@ export function SettingsDialog({ isOpen, onClose, initialCategory = 'general' }:
     setUiRadiusPreset,
     setThemeTonePreset,
     setAccentColor,
+    setCanvasEdgeRoutingMode,
   } = useSettingsStore();
   const providers = useMemo(() => {
     const providerOrder = ['ppio', 'fal', 'kie', 'grsai'];
@@ -77,6 +93,7 @@ export function SettingsDialog({ isOpen, onClose, initialCategory = 'general' }:
   const [localUiRadiusPreset, setLocalUiRadiusPreset] = useState(uiRadiusPreset);
   const [localThemeTonePreset, setLocalThemeTonePreset] = useState(themeTonePreset);
   const [localAccentColor, setLocalAccentColor] = useState(accentColor);
+  const [localCanvasEdgeRoutingMode, setLocalCanvasEdgeRoutingMode] = useState(canvasEdgeRoutingMode);
   const [revealedApiKeys, setRevealedApiKeys] = useState<Record<string, boolean>>({});
   const { shouldRender, isVisible } = useDialogTransition(isOpen, UI_DIALOG_TRANSITION_MS);
 
@@ -115,6 +132,7 @@ export function SettingsDialog({ isOpen, onClose, initialCategory = 'general' }:
     setLocalUiRadiusPreset(uiRadiusPreset);
     setLocalThemeTonePreset(themeTonePreset);
     setLocalAccentColor(accentColor);
+    setLocalCanvasEdgeRoutingMode(canvasEdgeRoutingMode);
     setRevealedApiKeys({});
     setLocalDownloadPathInput('');
   }, [
@@ -129,6 +147,7 @@ export function SettingsDialog({ isOpen, onClose, initialCategory = 'general' }:
     uiRadiusPreset,
     themeTonePreset,
     accentColor,
+    canvasEdgeRoutingMode,
     initialCategory,
   ]);
 
@@ -145,6 +164,7 @@ export function SettingsDialog({ isOpen, onClose, initialCategory = 'general' }:
     setUiRadiusPreset(localUiRadiusPreset);
     setThemeTonePreset(localThemeTonePreset);
     setAccentColor(localAccentColor);
+    setCanvasEdgeRoutingMode(localCanvasEdgeRoutingMode);
     onClose();
   }, [
     localApiKeys,
@@ -157,6 +177,7 @@ export function SettingsDialog({ isOpen, onClose, initialCategory = 'general' }:
     localUiRadiusPreset,
     localThemeTonePreset,
     localAccentColor,
+    localCanvasEdgeRoutingMode,
     providers,
     setProviderApiKey,
     setGrsaiNanoBananaProModel,
@@ -168,6 +189,7 @@ export function SettingsDialog({ isOpen, onClose, initialCategory = 'general' }:
     setUiRadiusPreset,
     setThemeTonePreset,
     setAccentColor,
+    setCanvasEdgeRoutingMode,
     onClose,
   ]);
 
@@ -325,42 +347,27 @@ export function SettingsDialog({ isOpen, onClose, initialCategory = 'general' }:
                       <div key={provider.id} className="rounded-lg border border-border-dark bg-bg-dark p-4">
                         <div className="mb-3">
                           <h3 className="text-sm font-medium text-text-dark">{displayName}</h3>
-                          {provider.id === 'ppio' ? (
-                            <a
-                              href="https://ppio.com/settings/key-management"
-                              target="_blank"
-                              rel="noreferrer"
-                              className="text-xs text-accent hover:underline"
-                            >
-                              {t('settings.getApiKeyLink')}
-                            </a>
-                          ) : provider.id === 'grsai' ? (
-                            <a
-                              href="https://grsai.com/zh/dashboard/api-keys"
-                              target="_blank"
-                              rel="noreferrer"
-                              className="text-xs text-accent hover:underline"
-                            >
-                              {t('settings.getApiKeyLink')}
-                            </a>
-                          ) : provider.id === 'kie' ? (
-                            <a
-                              href="https://kie.ai/api-key"
-                              target="_blank"
-                              rel="noreferrer"
-                              className="text-xs text-accent hover:underline"
-                            >
-                              {t('settings.getApiKeyLink')}
-                            </a>
-                          ) : provider.id === 'fal' ? (
-                            <a
-                              href="https://fal.ai/dashboard/keys"
-                              target="_blank"
-                              rel="noreferrer"
-                              className="text-xs text-accent hover:underline"
-                            >
-                              {t('settings.getApiKeyLink')}
-                            </a>
+                          {PROVIDER_REGISTER_URLS[provider.id] && PROVIDER_GET_KEY_URLS[provider.id] ? (
+                            <p className="text-xs text-text-muted">
+                              {t('settings.providerApiKeyGuidePrefix')}{' '}
+                              <a
+                                href={PROVIDER_REGISTER_URLS[provider.id]}
+                                target="_blank"
+                                rel="noreferrer"
+                                className="text-accent hover:underline"
+                              >
+                                {t('settings.providerRegisterLink')}
+                              </a>
+                              {t('settings.providerApiKeyGuideMiddle')}{' '}
+                              <a
+                                href={PROVIDER_GET_KEY_URLS[provider.id]}
+                                target="_blank"
+                                rel="noreferrer"
+                                className="text-accent hover:underline"
+                              >
+                                {t('settings.getApiKeyLink')}
+                              </a>
+                            </p>
                           ) : (
                             <p className="text-xs text-text-muted">{provider.id}</p>
                           )}
@@ -501,6 +508,30 @@ export function SettingsDialog({ isOpen, onClose, initialCategory = 'general' }:
                         <option value="neutral">{t('settings.toneNeutral')}</option>
                         <option value="warm">{t('settings.toneWarm')}</option>
                         <option value="cool">{t('settings.toneCool')}</option>
+                      </UiSelect>
+                    </div>
+                  </div>
+
+                  <div className="rounded-lg border border-border-dark bg-bg-dark p-4">
+                    <h3 className="text-sm font-medium text-text-dark">
+                      {t('settings.edgeRoutingMode')}
+                    </h3>
+                    <p className="mt-1 text-xs text-text-muted">
+                      {t('settings.edgeRoutingModeDesc')}
+                    </p>
+                    <div className="mt-3">
+                      <UiSelect
+                        value={localCanvasEdgeRoutingMode}
+                        onChange={(event) =>
+                          setLocalCanvasEdgeRoutingMode(
+                            event.target.value as typeof localCanvasEdgeRoutingMode
+                          )
+                        }
+                        className="h-9 text-sm"
+                      >
+                        <option value="spline">{t('settings.edgeRoutingSpline')}</option>
+                        <option value="orthogonal">{t('settings.edgeRoutingOrthogonal')}</option>
+                        <option value="smartOrthogonal">{t('settings.edgeRoutingSmartOrthogonal')}</option>
                       </UiSelect>
                     </div>
                   </div>

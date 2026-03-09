@@ -1,16 +1,21 @@
-import { memo } from 'react';
+import { memo, useMemo } from 'react';
 import {
   BaseEdge,
   EdgeLabelRenderer,
   getBezierPath,
+  Position,
   type EdgeProps,
 } from '@xyflow/react';
 
 import { useCanvasStore } from '@/stores/canvasStore';
+import { useSettingsStore } from '@/stores/settingsStore';
+import { buildOrthogonalRoute } from './edgeRouting';
 
 export const DisconnectableEdge = memo(function DisconnectableEdge(props: EdgeProps) {
   const {
     id,
+    source,
+    target,
     selected,
     sourceX,
     sourceY,
@@ -22,14 +27,55 @@ export const DisconnectableEdge = memo(function DisconnectableEdge(props: EdgePr
     style,
   } = props;
   const deleteEdge = useCanvasStore((state) => state.deleteEdge);
-  const [edgePath, labelX, labelY] = getBezierPath({
+  const nodes = useCanvasStore((state) => state.nodes);
+  const canvasEdgeRoutingMode = useSettingsStore((state) => state.canvasEdgeRoutingMode);
+
+  const { edgePath, labelX, labelY } = useMemo(() => {
+    if (canvasEdgeRoutingMode === 'spline') {
+      const [path, nextLabelX, nextLabelY] = getBezierPath({
+        sourceX,
+        sourceY,
+        sourcePosition,
+        targetX,
+        targetY,
+        targetPosition,
+      });
+      return {
+        edgePath: path,
+        labelX: nextLabelX,
+        labelY: nextLabelY,
+      };
+    }
+
+    const route = buildOrthogonalRoute({
+      sourceId: source,
+      targetId: target,
+      sourceX,
+      sourceY,
+      sourcePosition: sourcePosition ?? Position.Right,
+      targetX,
+      targetY,
+      targetPosition: targetPosition ?? Position.Left,
+      nodes,
+      smartAvoidance: canvasEdgeRoutingMode === 'smartOrthogonal',
+    });
+    return {
+      edgePath: route.path,
+      labelX: route.labelX,
+      labelY: route.labelY,
+    };
+  }, [
+    canvasEdgeRoutingMode,
+    nodes,
+    source,
+    sourcePosition,
     sourceX,
     sourceY,
-    sourcePosition,
+    target,
+    targetPosition,
     targetX,
     targetY,
-    targetPosition,
-  });
+  ]);
 
   return (
     <>

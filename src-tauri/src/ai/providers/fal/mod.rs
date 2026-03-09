@@ -15,7 +15,6 @@ const FAL_NANO_BANANA_2_I2I_MODEL_PATH: &str = "fal-ai/nano-banana-2/edit";
 const FAL_NANO_BANANA_PRO_T2I_MODEL_PATH: &str = "fal-ai/nano-banana-pro";
 const FAL_NANO_BANANA_PRO_I2I_MODEL_PATH: &str = "fal-ai/nano-banana-pro/edit";
 const POLL_INTERVAL_MS: u64 = 2000;
-const POLL_MAX_ATTEMPTS: usize = 360;
 
 #[derive(Debug, Deserialize)]
 struct FalSubmitResponse {
@@ -220,7 +219,7 @@ impl AIProvider for FalProvider {
             Some(fallback_result_endpoint),
         ];
 
-        for _ in 0..POLL_MAX_ATTEMPTS {
+        loop {
             let mut status_body: Option<FalStatusResponse> = None;
             let mut last_status_error: Option<String> = None;
             for endpoint in status_endpoints.iter().flatten() {
@@ -317,7 +316,5 @@ impl AIProvider for FalProvider {
                 }
             }
         }
-
-        Err(AIError::Provider("FAL polling timeout".to_string()))
     }
 }

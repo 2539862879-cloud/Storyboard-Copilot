@@ -28,7 +28,7 @@ import {
   canvasAiGateway,
   graphImageResolver,
 } from '@/features/canvas/application/canvasServices';
-import { showErrorDialog } from '@/features/canvas/application/errorDialog';
+import { resolveErrorContent, showErrorDialog } from '@/features/canvas/application/errorDialog';
 import {
   detectAspectRatio,
   prepareNodeImage,
@@ -898,9 +898,9 @@ export const StoryboardGenNode = memo(({ id, data, selected, width, height }: St
         generationStartedAt: null,
       });
     } catch (generationError) {
-      const errorMessage = generationError instanceof Error ? generationError.message : '生成失败';
-      setError(errorMessage);
-      void showErrorDialog(errorMessage, '错误');
+      const resolvedError = resolveErrorContent(generationError, '生成失败');
+      setError(resolvedError.message);
+      void showErrorDialog(resolvedError.message, '错误', resolvedError.details);
       // Clear generating state and mark as failed
       updateNodeData(newNodeId, {
         isGenerating: false,

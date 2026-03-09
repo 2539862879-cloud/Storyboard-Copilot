@@ -52,6 +52,18 @@ function resolveNodeDimension(value: number | undefined, fallback: number): numb
   return fallback;
 }
 
+function resolveDroppedImageFile(event: DragEvent<HTMLElement>): File | null {
+  const directFile = event.dataTransfer.files?.[0];
+  if (directFile) {
+    return directFile;
+  }
+
+  const item = Array.from(event.dataTransfer.items || []).find(
+    (candidate) => candidate.kind === 'file' && candidate.type.startsWith('image/')
+  );
+  return item?.getAsFile() ?? null;
+}
+
 export const UploadNode = memo(({ id, data, selected, width, height }: UploadNodeProps) => {
   const { t } = useTranslation();
   const setSelectedNode = useCanvasStore((state) => state.setSelectedNode);
@@ -210,7 +222,8 @@ export const UploadNode = memo(({ id, data, selected, width, height }: UploadNod
   const handleDrop = useCallback(
     async (event: DragEvent<HTMLElement>) => {
       event.preventDefault();
-      const file = event.dataTransfer.files?.[0];
+      event.stopPropagation();
+      const file = resolveDroppedImageFile(event);
       if (!file || !file.type.startsWith('image/')) {
         return;
       }
@@ -219,6 +232,11 @@ export const UploadNode = memo(({ id, data, selected, width, height }: UploadNod
     },
     [processFile]
   );
+
+  const handleDragOver = useCallback((event: DragEvent<HTMLElement>) => {
+    event.preventDefault();
+    event.stopPropagation();
+  }, []);
 
   const handleFileChange = useCallback(
     async (event: ChangeEvent<HTMLInputElement>) => {
@@ -284,6 +302,8 @@ export const UploadNode = memo(({ id, data, selected, width, height }: UploadNod
       `}
       style={{ width: resolvedWidth, height: resolvedHeight }}
       onClick={handleNodeClick}
+      onDrop={handleDrop}
+      onDragOver={handleDragOver}
     >
       <NodeHeader
         className={NODE_HEADER_FLOATING_POSITION_CLASS}
@@ -308,8 +328,6 @@ export const UploadNode = memo(({ id, data, selected, width, height }: UploadNod
       ) : (
         <label
           className="block h-full w-full overflow-hidden rounded-[var(--node-radius)] bg-bg-dark"
-          onDrop={handleDrop}
-          onDragOver={(event) => event.preventDefault()}
         >
           <div className="flex h-full w-full cursor-pointer flex-col items-center justify-center gap-2 text-text-muted/85">
             <Upload className="h-7 w-7 opacity-60" />

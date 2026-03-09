@@ -16,7 +16,6 @@ const RESULT_ENDPOINT_PATH: &str = "/v1/draw/result";
 const DEFAULT_BASE_URL: &str = "https://grsai.dakka.com.cn";
 const DEFAULT_PRO_MODEL: &str = "nano-banana-pro";
 const POLL_INTERVAL_MS: u64 = 2000;
-const POLL_MAX_ATTEMPTS: usize = 90;
 
 const SUPPORTED_MODELS: [&str; 7] = [
     "nano-banana-2",
@@ -235,7 +234,7 @@ impl GrsaiProvider {
             .clone()
             .ok_or_else(|| AIError::InvalidRequest("API key not set".to_string()))?;
 
-        for _ in 0..POLL_MAX_ATTEMPTS {
+        loop {
             let response = self
                 .client
                 .post(&endpoint)
@@ -279,8 +278,6 @@ impl GrsaiProvider {
                 }
             }
         }
-
-        Err(AIError::Provider("GRSAI polling timeout".to_string()))
     }
 }
 

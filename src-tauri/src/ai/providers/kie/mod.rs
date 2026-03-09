@@ -20,7 +20,6 @@ const RECORD_INFO_PATH: &str = "/api/v1/jobs/recordInfo";
 const FILE_UPLOAD_PATH: &str = "/api/file-stream-upload";
 const UPLOAD_PATH: &str = "images/storyboard-copilot";
 const POLL_INTERVAL_MS: u64 = 2500;
-const POLL_MAX_ATTEMPTS: usize = 240;
 
 #[derive(Debug, Deserialize)]
 struct KieCreateTaskResponse {
@@ -353,7 +352,7 @@ impl KieProvider {
 
     async fn poll_task(&self, api_key: &str, task_id: &str) -> Result<String, AIError> {
         let endpoint = format!("{}{}", TASK_BASE_URL, RECORD_INFO_PATH);
-        for _ in 0..POLL_MAX_ATTEMPTS {
+        loop {
             let response = self
                 .client
                 .get(&endpoint)
@@ -414,8 +413,6 @@ impl KieProvider {
                 }
             }
         }
-
-        Err(AIError::Provider("KIE polling timeout".to_string()))
     }
 }
 

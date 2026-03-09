@@ -11,26 +11,6 @@ export interface GenerateRequest {
 
 const BASE64_PREVIEW_HEAD = 96;
 const BASE64_PREVIEW_TAIL = 24;
-const INVOKE_TIMEOUT_MS = 120_000;
-const KIE_INVOKE_TIMEOUT_MS = 12 * 60_000;
-
-function withTimeout<T>(promise: Promise<T>, timeoutMs: number, action: string): Promise<T> {
-  return new Promise<T>((resolve, reject) => {
-    const timer = window.setTimeout(() => {
-      reject(new Error(`${action} timeout after ${timeoutMs}ms`));
-    }, timeoutMs);
-
-    promise
-      .then((value) => {
-        window.clearTimeout(timer);
-        resolve(value);
-      })
-      .catch((error) => {
-        window.clearTimeout(timer);
-        reject(error);
-      });
-  });
-}
 
 function truncateText(value: string, max = 200): string {
   if (value.length <= max) {
@@ -74,8 +54,50 @@ function sanitizeGenerateRequestForLog(request: GenerateRequest): Record<string,
   };
 }
 
-function resolveInvokeTimeoutMs(request: GenerateRequest): number {
-  return request.model.startsWith('kie/') ? KIE_INVOKE_TIMEOUT_MS : INVOKE_TIMEOUT_MS;
+interface ErrorWithDetails extends Error {
+  details?: string;
+}
+
+function normalizeInvokeError(error: unknown): { message: string; details?: string } {
+  if (error instanceof Error) {
+    const detailsText =
+      'details' in error
+        ? typeof (error as { details?: unknown }).details === 'string'
+          ? (error as { details?: string }).details
+          : undefined
+        : undefined;
+    return { message: error.message || 'Generation failed', details: detailsText };
+  }
+
+  if (typeof error === 'string') {
+    return { message: error || 'Generation failed', details: error || undefined };
+  }
+
+  if (error && typeof error === 'object') {
+    const record = error as Record<string, unknown>;
+    const message =
+      (typeof record.message === 'string' && record.message) ||
+      (typeof record.error === 'string' && record.error) ||
+      (typeof record.msg === 'string' && record.msg) ||
+      'Generation failed';
+    let details: string | undefined;
+    try {
+      details = truncateText(JSON.stringify(record, null, 2), 2000);
+    } catch {
+      details = truncateText(String(record), 2000);
+    }
+    return { message, details };
+  }
+
+  return { message: 'Generation failed' };
+}
+
+function createErrorWithDetails(message: string, details?: string): ErrorWithDetails {
+  const error: ErrorWithDetails = new Error(message);
+  if (details) {
+    error.details = details;
+  }
+  return error;
 }
 
 export async function setApiKey(provider: string, apiKey: string): Promise<void> {
@@ -92,10 +114,8 @@ export async function setApiKey(provider: string, apiKey: string): Promise<void>
 
 export async function generateImage(request: GenerateRequest): Promise<string> {
   const startedAt = performance.now();
-  const timeoutMs = resolveInvokeTimeoutMs(request);
   console.info('[AI] generate_image request', {
     ...sanitizeGenerateRequestForLog(request),
-    timeoutMs,
     tauri: isTauri(),
   });
 
@@ -104,11 +124,26 @@ export async function generateImage(request: GenerateRequest): Promise<string> {
   }
 
   try {
-    const result = await withTimeout(
-      invoke<string>('generate_image', { request }),
-      timeoutMs,
-      'generate_image'
-    );
+    const rawResult = await invoke<unknown>('generate_image', { request });
+    if (typeof rawResult !== 'string') {
+      throw createErrorWithDetails(
+        'Generation returned non-string payload',
+        truncateText(
+          (() => {
+            try {
+              return JSON.stringify(rawResult, null, 2);
+            } catch {
+              return String(rawResult);
+            }
+          })(),
+          2000
+        )
+      );
+    }
+    const result = rawResult.trim();
+    if (!result) {
+      throw createErrorWithDetails('Generation returned empty image source');
+    }
     const elapsedMs = Math.round(performance.now() - startedAt);
     console.info('[AI] generate_image success', {
       elapsedMs,
@@ -117,12 +152,16 @@ export async function generateImage(request: GenerateRequest): Promise<string> {
     return result;
   } catch (error) {
     const elapsedMs = Math.round(performance.now() - startedAt);
+    const normalizedError = normalizeInvokeError(error);
     console.error('[AI] generate_image failed', {
       elapsedMs,
       request: sanitizeGenerateRequestForLog(request),
       error,
+      normalizedError,
     });
-    throw error;
+    const commandError: ErrorWithDetails = new Error(normalizedError.message);
+    commandError.details = normalizedError.details;
+    throw commandError;
   }
 }
 

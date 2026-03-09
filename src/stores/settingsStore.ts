@@ -3,6 +3,7 @@ import { persist } from 'zustand/middleware';
 
 export type UiRadiusPreset = 'compact' | 'default' | 'large';
 export type ThemeTonePreset = 'neutral' | 'warm' | 'cool';
+export type CanvasEdgeRoutingMode = 'spline' | 'orthogonal' | 'smartOrthogonal';
 export type ProviderApiKeys = Record<string, string>;
 export const DEFAULT_GRSAI_NANO_BANANA_PRO_MODEL = 'nano-banana-pro';
 
@@ -18,6 +19,7 @@ interface SettingsState {
   uiRadiusPreset: UiRadiusPreset;
   themeTonePreset: ThemeTonePreset;
   accentColor: string;
+  canvasEdgeRoutingMode: CanvasEdgeRoutingMode;
   setProviderApiKey: (providerId: string, key: string) => void;
   setGrsaiNanoBananaProModel: (model: string) => void;
   setHideProviderGuidePopover: (hide: boolean) => void;
@@ -29,6 +31,7 @@ interface SettingsState {
   setUiRadiusPreset: (preset: UiRadiusPreset) => void;
   setThemeTonePreset: (preset: ThemeTonePreset) => void;
   setAccentColor: (color: string) => void;
+  setCanvasEdgeRoutingMode: (mode: CanvasEdgeRoutingMode) => void;
 }
 
 const HEX_COLOR_PATTERN = /^#?[0-9a-fA-F]{6}$/;
@@ -51,6 +54,15 @@ function normalizeGrsaiNanoBananaProModel(input: string | null | undefined): str
     return trimmed;
   }
   return DEFAULT_GRSAI_NANO_BANANA_PRO_MODEL;
+}
+
+function normalizeCanvasEdgeRoutingMode(
+  input: CanvasEdgeRoutingMode | string | null | undefined
+): CanvasEdgeRoutingMode {
+  if (input === 'orthogonal' || input === 'smartOrthogonal' || input === 'spline') {
+    return input;
+  }
+  return 'spline';
 }
 
 function normalizeApiKeys(input: ProviderApiKeys | null | undefined): ProviderApiKeys {
@@ -83,6 +95,7 @@ export const useSettingsStore = create<SettingsState>()(
       uiRadiusPreset: 'default',
       themeTonePreset: 'neutral',
       accentColor: '#3B82F6',
+      canvasEdgeRoutingMode: 'spline',
       setProviderApiKey: (providerId, key) =>
         set((state) => ({
           apiKeys: {
@@ -111,10 +124,12 @@ export const useSettingsStore = create<SettingsState>()(
       setUiRadiusPreset: (uiRadiusPreset) => set({ uiRadiusPreset }),
       setThemeTonePreset: (themeTonePreset) => set({ themeTonePreset }),
       setAccentColor: (color) => set({ accentColor: normalizeHexColor(color) }),
+      setCanvasEdgeRoutingMode: (canvasEdgeRoutingMode) =>
+        set({ canvasEdgeRoutingMode: normalizeCanvasEdgeRoutingMode(canvasEdgeRoutingMode) }),
     }),
     {
       name: 'settings-storage',
-      version: 5,
+      version: 6,
       migrate: (persistedState: unknown) => {
         const state = (persistedState ?? {}) as {
           apiKey?: string;
@@ -122,6 +137,7 @@ export const useSettingsStore = create<SettingsState>()(
           ignoreAtTagWhenCopyingAndGenerating?: boolean;
           grsaiNanoBananaProModel?: string;
           hideProviderGuidePopover?: boolean;
+          canvasEdgeRoutingMode?: CanvasEdgeRoutingMode | string;
         };
 
         const migratedApiKeys = normalizeApiKeys(state.apiKeys);
@@ -136,6 +152,7 @@ export const useSettingsStore = create<SettingsState>()(
               state.grsaiNanoBananaProModel
             ),
             hideProviderGuidePopover: state.hideProviderGuidePopover ?? false,
+            canvasEdgeRoutingMode: normalizeCanvasEdgeRoutingMode(state.canvasEdgeRoutingMode),
           };
         }
 
@@ -147,6 +164,7 @@ export const useSettingsStore = create<SettingsState>()(
             state.grsaiNanoBananaProModel
           ),
           hideProviderGuidePopover: state.hideProviderGuidePopover ?? false,
+          canvasEdgeRoutingMode: normalizeCanvasEdgeRoutingMode(state.canvasEdgeRoutingMode),
         };
       },
     }

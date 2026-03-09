@@ -47,6 +47,39 @@ export interface PreparedNodeImage {
   aspectRatio: string;
 }
 
+interface ErrorWithDetails extends Error {
+  details?: string;
+}
+
+function stringifyUnknown(value: unknown): string {
+  if (typeof value === 'string') {
+    return value;
+  }
+  if (value instanceof Error) {
+    return value.message;
+  }
+  try {
+    return JSON.stringify(value, null, 2);
+  } catch {
+    return String(value);
+  }
+}
+
+function createImagePipelineError(message: string, details?: string, cause?: unknown): ErrorWithDetails {
+  const error: ErrorWithDetails = new Error(message);
+  const detailParts: string[] = [];
+  if (details) {
+    detailParts.push(details);
+  }
+  if (cause !== undefined) {
+    detailParts.push(`cause: ${stringifyUnknown(cause)}`);
+  }
+  if (detailParts.length > 0) {
+    error.details = detailParts.join('\n');
+  }
+  return error;
+}
+
 const ORIGINAL_IMAGE_ZOOM_THRESHOLD = 1.45;
 
 export function shouldUseOriginalImageByZoom(zoom: number): boolean {
@@ -130,7 +163,10 @@ export async function loadImageElement(source: string): Promise<HTMLImageElement
 
   return await new Promise((resolve, reject) => {
     image.onload = () => resolve(image);
-    image.onerror = () => reject(new Error('图片加载失败'));
+    image.onerror = () =>
+      reject(
+        createImagePipelineError('图片加载失败', `source=${source}\ndisplaySource=${displaySource}`)
+      );
     image.src = displaySource;
   });
 }
@@ -142,11 +178,18 @@ export async function imageUrlToDataUrl(imageUrl: string): Promise<string> {
 
   if (isLikelyLocalImagePath(imageUrl)) {
     if (isTauri()) {
-      return await loadImage(imageUrl);
+      try {
+        return await loadImage(imageUrl);
+      } catch (error) {
+        throw createImagePipelineError('无法读取本地图片数据', `source=${imageUrl}`, error);
+      }
     }
     const localResponse = await fetch(resolveImageDisplayUrl(imageUrl));
     if (!localResponse.ok) {
-      throw new Error('无法读取本地图片数据');
+      throw createImagePipelineError(
+        '无法读取本地图片数据',
+        `source=${imageUrl}\nstatus=${localResponse.status}`
+      );
     }
     const localBlob = await localResponse.blob();
     return await blobToDataUrl(localBlob);
@@ -154,7 +197,7 @@ export async function imageUrlToDataUrl(imageUrl: string): Promise<string> {
 
   const response = await fetch(imageUrl);
   if (!response.ok) {
-    throw new Error('无法下载图片数据');
+    throw createImagePipelineError('无法下载图片数据', `url=${imageUrl}\nstatus=${response.status}`);
   }
 
   const blob = await response.blob();
@@ -317,12 +360,17 @@ export async function prepareNodeImage(
   imageUrl: string,
   maxPreviewDimension = DEFAULT_PREVIEW_MAX_DIMENSION
 ): Promise<PreparedNodeImage> {
+  const trimmedImageUrl = imageUrl.trim();
+  if (!trimmedImageUrl) {
+    throw createImagePipelineError('未获取到可用图片结果', 'imageUrl is empty');
+  }
+
   const started = performance.now();
   if (isTauri()) {
     const safeMaxDimension = Math.max(64, Math.floor(maxPreviewDimension));
     try {
       const tauriStarted = performance.now();
-      const prepared = await prepareNodeImageSource(imageUrl, safeMaxDimension);
+      const prepared = await prepareNodeImageSource(trimmedImageUrl, safeMaxDimension);
       console.info(
         `[upload-perf][imageData] prepareNodeImage tauri-source elapsed=${Math.round(performance.now() - tauriStarted)}ms total=${Math.round(performance.now() - started)}ms`
       );
@@ -331,27 +379,39 @@ export async function prepareNodeImage(
         previewImageUrl: prepared.previewImagePath,
         aspectRatio: prepared.aspectRatio,
       };
-    } catch {
+    } catch (error) {
+      console.warn('[imageData] prepareNodeImage tauri-source failed, fallback to browser path', {
+        source: trimmedImageUrl,
+        error,
+      });
       // fallback to browser path for compatibility
     }
   }
 
-  const persistedImagePath = await persistImageLocally(imageUrl);
-  const normalizedDataUrl = await imageUrlToDataUrl(persistedImagePath);
-  const image = await loadImageElement(normalizedDataUrl);
-  const safeMaxDimension = Math.max(64, Math.floor(maxPreviewDimension));
-  const previewDataUrl = renderPreviewDataUrl(image, normalizedDataUrl, safeMaxDimension);
-  const previewImagePath =
-    previewDataUrl === normalizedDataUrl
-      ? persistedImagePath
-      : await persistImageLocally(previewDataUrl);
+  try {
+    const persistedImagePath = await persistImageLocally(trimmedImageUrl);
+    const normalizedDataUrl = await imageUrlToDataUrl(persistedImagePath);
+    const image = await loadImageElement(normalizedDataUrl);
+    const safeMaxDimension = Math.max(64, Math.floor(maxPreviewDimension));
+    const previewDataUrl = renderPreviewDataUrl(image, normalizedDataUrl, safeMaxDimension);
+    const previewImagePath =
+      previewDataUrl === normalizedDataUrl
+        ? persistedImagePath
+        : await persistImageLocally(previewDataUrl);
 
-  console.info(
-    `[upload-perf][imageData] prepareNodeImage browser-fallback total=${Math.round(performance.now() - started)}ms`
-  );
-  return {
-    imageUrl: persistedImagePath,
-    previewImageUrl: previewImagePath,
-    aspectRatio: reduceAspectRatio(image.naturalWidth, image.naturalHeight),
-  };
+    console.info(
+      `[upload-perf][imageData] prepareNodeImage browser-fallback total=${Math.round(performance.now() - started)}ms`
+    );
+    return {
+      imageUrl: persistedImagePath,
+      previewImageUrl: previewImagePath,
+      aspectRatio: reduceAspectRatio(image.naturalWidth, image.naturalHeight),
+    };
+  } catch (error) {
+    throw createImagePipelineError(
+      '生成结果无法解析为图片',
+      `source=${trimmedImageUrl}`,
+      error
+    );
+  }
 }
