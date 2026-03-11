@@ -8,7 +8,7 @@ import {
   useEffect,
   useRef,
 } from 'react';
-import { Handle, Position, type NodeProps } from '@xyflow/react';
+import { Handle, Position, useUpdateNodeInternals, type NodeProps } from '@xyflow/react';
 import { Sparkles } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 
@@ -85,8 +85,8 @@ interface PickerAnchor {
 
 const PICKER_FALLBACK_ANCHOR: PickerAnchor = { left: 8, top: 8 };
 const PICKER_Y_OFFSET_PX = 20;
-const IMAGE_EDIT_NODE_MIN_WIDTH = 420;
-const IMAGE_EDIT_NODE_MIN_HEIGHT = 280;
+const IMAGE_EDIT_NODE_MIN_WIDTH = 390;
+const IMAGE_EDIT_NODE_MIN_HEIGHT = 180;
 const IMAGE_EDIT_NODE_MAX_WIDTH = 1400;
 const IMAGE_EDIT_NODE_MAX_HEIGHT = 1000;
 const IMAGE_EDIT_NODE_DEFAULT_WIDTH = 520;
@@ -227,6 +227,7 @@ function buildAiResultNodeTitle(prompt: string, fallbackTitle: string): string {
 
 export const ImageEditNode = memo(({ id, data, selected, width, height }: ImageEditNodeProps) => {
   const { t } = useTranslation();
+  const updateNodeInternals = useUpdateNodeInternals();
   const [error, setError] = useState<string | null>(null);
 
   const rootRef = useRef<HTMLDivElement>(null);
@@ -319,6 +320,10 @@ export const ImageEditNode = memo(({ id, data, selected, width, height }: ImageE
 
   const resolvedWidth = Math.max(IMAGE_EDIT_NODE_MIN_WIDTH, Math.round(width ?? IMAGE_EDIT_NODE_DEFAULT_WIDTH));
   const resolvedHeight = Math.max(IMAGE_EDIT_NODE_MIN_HEIGHT, Math.round(height ?? IMAGE_EDIT_NODE_DEFAULT_HEIGHT));
+
+  useEffect(() => {
+    updateNodeInternals(id);
+  }, [id, resolvedHeight, resolvedWidth, updateNodeInternals]);
 
   useEffect(() => {
     const externalPrompt = data.prompt ?? '';
@@ -723,11 +728,10 @@ export const ImageEditNode = memo(({ id, data, selected, width, height }: ImageE
                     insertImageReference(index);
                   }}
                   onMouseEnter={() => setPickerActiveIndex(index)}
-                  className={`flex w-full items-center gap-2 border border-transparent bg-bg-dark/70 px-2 py-2 text-left text-sm text-text-dark transition-colors hover:border-[rgba(255,255,255,0.18)] ${
-                    pickerActiveIndex === index
+                  className={`flex w-full items-center gap-2 border border-transparent bg-bg-dark/70 px-2 py-2 text-left text-sm text-text-dark transition-colors hover:border-[rgba(255,255,255,0.18)] ${pickerActiveIndex === index
                       ? 'border-[rgba(255,255,255,0.24)] bg-bg-dark'
                       : ''
-                  }`}
+                    }`}
                 >
                   <CanvasNodeImage
                     src={item.displayUrl}
@@ -755,15 +759,13 @@ export const ImageEditNode = memo(({ id, data, selected, width, height }: ImageE
           onModelChange={(modelId) => {
             updateNodeData(id, { model: modelId });
           }}
-          onResolutionChange={(resolution) =>
-            {
-              updateNodeData(id, { size: resolution as ImageSize });
-            }
+          onResolutionChange={(resolution) => {
+            updateNodeData(id, { size: resolution as ImageSize });
           }
-          onAspectRatioChange={(aspectRatio) =>
-            {
-              updateNodeData(id, { requestAspectRatio: aspectRatio });
-            }
+          }
+          onAspectRatioChange={(aspectRatio) => {
+            updateNodeData(id, { requestAspectRatio: aspectRatio });
+          }
           }
           showWebSearchToggle={showWebSearchToggle}
           webSearchEnabled={webSearchEnabled}

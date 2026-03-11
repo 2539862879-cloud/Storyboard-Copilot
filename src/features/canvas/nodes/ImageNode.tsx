@@ -1,5 +1,11 @@
 import { memo, useEffect, useMemo, useState } from 'react';
-import { Handle, Position, useViewport, type NodeProps } from '@xyflow/react';
+import {
+  Handle,
+  Position,
+  useUpdateNodeInternals,
+  useViewport,
+  type NodeProps,
+} from '@xyflow/react';
 import { AlertTriangle, Image as ImageIcon, Sparkles } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 
@@ -41,6 +47,7 @@ function resolveNodeDimension(value: number | undefined, fallback: number): numb
 
 export const ImageNode = memo(({ id, data, selected, type, width, height }: ImageNodeProps) => {
   const { t } = useTranslation();
+  const updateNodeInternals = useUpdateNodeInternals();
   const setSelectedNode = useCanvasStore((state) => state.setSelectedNode);
   const updateNodeData = useCanvasStore((state) => state.updateNodeData);
   const { zoom } = useViewport();
@@ -74,6 +81,10 @@ export const ImageNode = memo(({ id, data, selected, type, width, height }: Imag
     () => resolveNodeDisplayName(type as CanvasNodeType, data),
     [data, type]
   );
+
+  useEffect(() => {
+    updateNodeInternals(id);
+  }, [id, resolvedHeight, resolvedWidth, updateNodeInternals]);
 
   useEffect(() => {
     if (!isGenerating) {

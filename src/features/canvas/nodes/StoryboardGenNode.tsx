@@ -106,7 +106,7 @@ const STORYBOARD_GRID_BASE_CELL_HEIGHT_PX = 78;
 const STORYBOARD_GRID_MAX_WIDTH_PX = 320;
 const STORYBOARD_CONTROL_ROW_WIDTH_PX = 274;
 const STORYBOARD_PARAMS_ROW_WIDTH_PX = 286;
-const STORYBOARD_GEN_NODE_MIN_WIDTH_PX = 520;
+const STORYBOARD_GEN_NODE_MIN_WIDTH_PX = 200;
 const STORYBOARD_GEN_NODE_MIN_HEIGHT_PX = 320;
 const STORYBOARD_GEN_HEADER_ADJUST = { x: 0, y: 0, scale: 1 };
 const STORYBOARD_GEN_ICON_ADJUST = { x: 0, y: 0, scale: 0.95 };
@@ -681,12 +681,12 @@ export const StoryboardGenNode = memo(({ id, data, selected, width, height }: St
     const nodeHeight = Math.max(
       STORYBOARD_GEN_NODE_MIN_HEIGHT_PX,
       Math.round(
-      NODE_VERTICAL_PADDING_PX +
-      CONTROL_ROW_HEIGHT_PX +
-      CONTROL_ROW_MARGIN_BOTTOM_PX +
-      roundedGridHeight +
-      FRAME_GRID_MARGIN_BOTTOM_PX +
-      PARAM_ROW_HEIGHT_PX
+        NODE_VERTICAL_PADDING_PX +
+        CONTROL_ROW_HEIGHT_PX +
+        CONTROL_ROW_MARGIN_BOTTOM_PX +
+        roundedGridHeight +
+        FRAME_GRID_MARGIN_BOTTOM_PX +
+        PARAM_ROW_HEIGHT_PX
       )
     );
 
@@ -1450,52 +1450,52 @@ export const StoryboardGenNode = memo(({ id, data, selected, width, height }: St
           {nodeData.frames.map((frame, index) => {
             const frameDescription = frameDescriptionDrafts[frame.id] ?? frame.description;
             return (
-            <div
-              key={frame.id}
-              className="relative overflow-hidden rounded border border-[rgba(255,255,255,0.06)] bg-bg-dark/40"
-              style={{ aspectRatio: frameLayout.cellAspectRatio }}
-            >
               <div
-                ref={(element) => {
-                  frameHighlightRefs.current[frame.id] = element;
-                }}
-                aria-hidden="true"
-                className="ui-scrollbar pointer-events-none absolute inset-0 overflow-y-auto overflow-x-hidden text-[10px] leading-4 text-text-dark"
-                style={{ scrollbarGutter: 'stable' }}
+                key={frame.id}
+                className="relative overflow-hidden rounded border border-[rgba(255,255,255,0.06)] bg-bg-dark/40"
+                style={{ aspectRatio: frameLayout.cellAspectRatio }}
               >
-                <div className="min-h-full whitespace-pre-wrap break-words px-1.5 py-1 text-left">
-                  {renderFrameDescriptionWithHighlights(frameDescription, incomingImages.length)}
+                <div
+                  ref={(element) => {
+                    frameHighlightRefs.current[frame.id] = element;
+                  }}
+                  aria-hidden="true"
+                  className="ui-scrollbar pointer-events-none absolute inset-0 overflow-y-auto overflow-x-hidden text-[10px] leading-4 text-text-dark"
+                  style={{ scrollbarGutter: 'stable' }}
+                >
+                  <div className="min-h-full whitespace-pre-wrap break-words px-1.5 py-1 text-left">
+                    {renderFrameDescriptionWithHighlights(frameDescription, incomingImages.length)}
+                  </div>
                 </div>
+                <textarea
+                  ref={(element) => {
+                    frameTextareaRefs.current[frame.id] = element;
+                  }}
+                  value={frameDescription}
+                  onChange={(event) => {
+                    const nextValue = event.target.value;
+                    handleFrameDescriptionChange(index, nextValue);
+                  }}
+                  onKeyDown={(event) => handleFrameDescriptionKeyDown(index, event)}
+                  onScroll={() => syncFrameHighlightScroll(frame.id)}
+                  onPointerDown={(event) => {
+                    lastPointerAnchorRef.current = {
+                      frameIndex: index,
+                      anchor: resolvePointerAnchor(rootRef.current, event.clientX, event.clientY, zoom),
+                    };
+                  }}
+                  onFocus={(event) => {
+                    activeFrameTextareaRef.current = event.currentTarget;
+                    syncFrameHighlightScroll(frame.id);
+                  }}
+                  placeholder={t('node.storyboardGen.framePlaceholder', {
+                    index: String(index + 1).padStart(2, '0'),
+                  })}
+                  wrap="soft"
+                  className="ui-scrollbar nodrag nowheel relative z-10 h-full w-full resize-none overflow-y-auto overflow-x-hidden bg-transparent px-1.5 py-1 text-left text-[10px] leading-4 text-transparent caret-text-dark placeholder:text-text-muted/40 focus:border-accent/50 focus:outline-none whitespace-pre-wrap break-words"
+                  style={{ scrollbarGutter: 'stable' }}
+                />
               </div>
-              <textarea
-                ref={(element) => {
-                  frameTextareaRefs.current[frame.id] = element;
-                }}
-                value={frameDescription}
-                onChange={(event) => {
-                  const nextValue = event.target.value;
-                  handleFrameDescriptionChange(index, nextValue);
-                }}
-                onKeyDown={(event) => handleFrameDescriptionKeyDown(index, event)}
-                onScroll={() => syncFrameHighlightScroll(frame.id)}
-                onPointerDown={(event) => {
-                  lastPointerAnchorRef.current = {
-                    frameIndex: index,
-                    anchor: resolvePointerAnchor(rootRef.current, event.clientX, event.clientY, zoom),
-                  };
-                }}
-                onFocus={(event) => {
-                  activeFrameTextareaRef.current = event.currentTarget;
-                  syncFrameHighlightScroll(frame.id);
-                }}
-                placeholder={t('node.storyboardGen.framePlaceholder', {
-                  index: String(index + 1).padStart(2, '0'),
-                })}
-                wrap="soft"
-                className="ui-scrollbar nodrag nowheel relative z-10 h-full w-full resize-none overflow-y-auto overflow-x-hidden bg-transparent px-1.5 py-1 text-left text-[10px] leading-4 text-transparent caret-text-dark placeholder:text-text-muted/40 focus:border-accent/50 focus:outline-none whitespace-pre-wrap break-words"
-                style={{ scrollbarGutter: 'stable' }}
-              />
-            </div>
             );
           })}
         </div>
@@ -1522,8 +1522,8 @@ export const StoryboardGenNode = memo(({ id, data, selected, width, height }: St
                 }}
                 onMouseEnter={() => setPickerActiveIndex(imageIndex)}
                 className={`flex w-full items-center gap-2 border border-transparent bg-bg-dark/70 px-2 py-2 text-left text-sm text-text-dark transition-colors hover:border-[rgba(255,255,255,0.18)] ${pickerActiveIndex === imageIndex
-                    ? 'border-[rgba(255,255,255,0.24)] bg-bg-dark'
-                    : ''
+                  ? 'border-[rgba(255,255,255,0.24)] bg-bg-dark'
+                  : ''
                   }`}
               >
                 <CanvasNodeImage
