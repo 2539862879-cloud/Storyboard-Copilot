@@ -46,6 +46,8 @@ interface ModelParamsControlsProps {
   paramsPanelAlign?: 'center' | 'start';
   modelPanelClassName?: string;
   paramsPanelClassName?: string;
+  providerOptionClassName?: string;
+  modelOptionClassName?: string;
 }
 
 interface PanelAnchor {
@@ -54,6 +56,11 @@ interface PanelAnchor {
 }
 
 const OTHER_PARAMS_PANEL_CLASS_NAME = 'w-[280px] p-3';
+const DEFAULT_MODEL_PANEL_CLASS_NAME = 'inline-block min-w-[320px] max-w-[calc(100vw-32px)] p-2';
+const DEFAULT_PROVIDER_OPTION_CLASS_NAME =
+  'min-w-[92px] px-3 text-center';
+const DEFAULT_MODEL_OPTION_CLASS_NAME =
+  'min-h-9 min-w-[128px] max-w-full justify-center px-3 py-2 text-center';
 
 function NanoBananaIcon({ className = '' }: { className?: string }) {
   return (
@@ -150,8 +157,10 @@ export const ModelParamsControls = memo(({
   paramsChipClassName = 'w-auto justify-start',
   modelPanelAlign = 'center',
   paramsPanelAlign = 'center',
-  modelPanelClassName = 'w-[360px] p-2',
+  modelPanelClassName = DEFAULT_MODEL_PANEL_CLASS_NAME,
   paramsPanelClassName = 'w-[420px] p-3',
+  providerOptionClassName = DEFAULT_PROVIDER_OPTION_CLASS_NAME,
+  modelOptionClassName = DEFAULT_MODEL_OPTION_CLASS_NAME,
 }: ModelParamsControlsProps) => {
   const { t } = useTranslation();
   const containerRef = useRef<HTMLDivElement>(null);
@@ -460,13 +469,13 @@ export const ModelParamsControls = memo(({
                 <div className="mb-2 text-xs font-medium text-text-muted">
                   {t('modelParams.provider')}
                 </div>
-                <div className="grid grid-cols-4 gap-2">
+                <div className="flex flex-wrap gap-2">
                   {providerOptions.map((provider) => {
                     const active = provider.id === panelProviderId;
                     return (
                       <button
                         key={provider.id}
-                        className={`h-8 rounded-lg border px-2 text-xs transition-colors ${active
+                        className={`h-8 rounded-lg border text-xs transition-colors ${providerOptionClassName} ${active
                           ? 'border-accent/50 bg-accent/15 text-text-dark'
                           : 'border-[rgba(255,255,255,0.12)] bg-bg-dark/65 text-text-muted hover:border-[rgba(255,255,255,0.2)]'
                           }`}
@@ -506,9 +515,9 @@ export const ModelParamsControls = memo(({
                     return (
                       <button
                         key={group.name}
-                        className={`flex h-9 w-[120px] items-center justify-center rounded-lg border px-3 text-center text-xs transition-colors ${active
-                          ? 'border-accent/50 bg-accent/15 text-text-dark'
-                          : 'border-[rgba(255,255,255,0.12)] bg-bg-dark/65 text-text-muted hover:border-[rgba(255,255,255,0.2)]'
+                        className={`inline-flex max-w-full items-center rounded-lg border text-xs leading-4 transition-colors ${modelOptionClassName} ${active
+                          ? 'border-accent/50 bg-accent/15 text-text-dark shadow-[inset_0_1px_0_rgba(255,255,255,0.05)]'
+                          : 'border-[rgba(255,255,255,0.12)] bg-bg-dark/65 text-text-muted hover:border-[rgba(255,255,255,0.2)] hover:bg-[rgba(255,255,255,0.05)]'
                           }`}
                         onClick={(event) => {
                           event.stopPropagation();
@@ -516,7 +525,7 @@ export const ModelParamsControls = memo(({
                           setOpenPanel(null);
                         }}
                       >
-                        <span className="truncate">{group.name}</span>
+                        <span className="max-w-full break-words text-center">{group.name}</span>
                       </button>
                     );
                   })}

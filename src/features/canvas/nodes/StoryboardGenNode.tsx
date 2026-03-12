@@ -1663,7 +1663,7 @@ export const StoryboardGenNode = memo(({ id, data, selected, width, height }: St
           paramsChipClassName={NODE_CONTROL_PARAMS_CHIP_CLASS}
           modelPanelAlign="center"
           paramsPanelAlign="center"
-          modelPanelClassName="w-[360px] p-2"
+          modelPanelClassName="inline-block min-w-[300px] max-w-[calc(100vw-32px)] p-2"
           paramsPanelClassName="w-[420px] p-3"
         />
 
