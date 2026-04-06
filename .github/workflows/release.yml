@@ -56,8 +56,9 @@ jobs:
       - name: Build application
         run: npm run tauri build -- --target ${{ matrix.platform.target }}
         env:
-          TAURI_PRIVATE_KEY: ${{ secrets.TAURI_PRIVATE_KEY }}
-          TAURI_KEY_PASSWORD: ${{ secrets.TAURI_KEY_PASSWORD }}
+          # 暂时跳过签名，移除私钥要求
+          # TAURI_PRIVATE_KEY: ${{ secrets.TAURI_PRIVATE_KEY }}
+          # TAURI_KEY_PASSWORD: ${{ secrets.TAURI_KEY_PASSWORD }}
 
       - name: Upload artifacts (macOS)
         if: matrix.platform.name == 'macos'
