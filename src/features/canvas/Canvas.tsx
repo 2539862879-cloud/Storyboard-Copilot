@@ -5,6 +5,7 @@ import {
   useMemo,
   useRef,
   type MouseEvent as ReactMouseEvent,
+  type DragEvent as ReactDragEvent,
 } from 'react';
 import {
   ReactFlow,
@@ -35,7 +36,7 @@ import {
   type CanvasNodeType,
   DEFAULT_NODE_WIDTH,
 } from '@/features/canvas/domain/canvasNodes';
-import { prepareNodeImage } from '@/features/canvas/application/imageData';
+import { prepareNodeImage, prepareNodeImageFromFile } from '@/features/canvas/application/imageData';
 import {
   buildGenerationErrorReport,
   CURRENT_RUNTIME_SESSION_ID,
@@ -55,6 +56,8 @@ import { SelectedNodeOverlay } from './ui/SelectedNodeOverlay';
 import { NodeToolDialog } from './ui/NodeToolDialog';
 import { ImageViewerModal } from './ui/ImageViewerModal';
 import { MissingApiKeyHint } from '@/features/settings/MissingApiKeyHint';
+import { BatchOperationMenu } from './ui/BatchOperationMenu';
+import { BatchOperationButton } from './ui/BatchOperationButton';
 
 const DEFAULT_VIEWPORT: Viewport = { x: 0, y: 0, zoom: 1 };
 
@@ -243,6 +246,14 @@ export function Canvas() {
   const [menuAllowedTypes, setMenuAllowedTypes] = useState<CanvasNodeType[] | undefined>(
     undefined
   );
+
+  // 批量操作相关状态
+  const [showBatchMenu, setShowBatchMenu] = useState(false);
+  const [batchMenuPosition, setBatchMenuPosition] = useState({ x: 0, y: 0 });
+  const [showBatchButton, setShowBatchButton] = useState(false);
+  const [batchButtonPosition, setBatchButtonPosition] = useState({ x: 0, y: 0 });
+  const longPressTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const isLongPressRef = useRef(false);
   const [pendingConnectStart, setPendingConnectStart] = useState<PendingConnectStart | null>(
     null
   );
@@ -1006,6 +1017,342 @@ export function Canvas() {
     setPreviewConnectionVisual(null);
   }, [openNodeMenuAtClientPosition, setSelectedNode]);
 
+  // 画布文件拖拽处理
+  const handleCanvasDragOver = useCallback((event: ReactDragEvent) => {
+    event.preventDefault();
+    event.dataTransfer.dropEffect = 'copy';
+  }, []);
+
+  const handleCanvasDrop = useCallback(
+    async (event: ReactDragEvent) => {
+      event.preventDefault();
+      event.stopPropagation();
+
+      // 获取文件列表
+      const files: File[] = [];
+      if (event.dataTransfer.files) {
+        for (let i = 0; i < event.dataTransfer.files.length; i++) {
+          const file = event.dataTransfer.files[i];
+          if (file.type.startsWith('image/') || file.type.startsWith('video/')) {
+            files.push(file);
+          }
+        }
+      }
+
+      if (files.length === 0) {
+        return;
+      }
+
+      // 获取鼠标在画布上的位置
+      const reactFlowBounds = wrapperRef.current?.getBoundingClientRect();
+      if (!reactFlowBounds) {
+        return;
+      }
+
+      // 计算画布坐标（考虑缩放和平移）
+      const position = reactFlowInstance.screenToFlowPosition({
+        x: event.clientX - reactFlowBounds.left,
+        y: event.clientY - reactFlowBounds.top,
+      });
+
+      // 设置网格布局参数
+      const HORIZONTAL_SPACING = 350; // 水平间距
+      const VERTICAL_SPACING = 350; // 垂直间距
+      const NODES_PER_ROW = 3; // 每行节点数
+
+      // 批量创建节点
+      const newNodesIds: string[] = [];
+      for (let i = 0; i < files.length; i++) {
+        const file = files[i];
+
+        // 计算新节点位置（网格布局）
+        const row = Math.floor(i / NODES_PER_ROW);
+        const col = i % NODES_PER_ROW;
+        const newPosition = {
+          x: position.x + col * HORIZONTAL_SPACING,
+          y: position.y + row * VERTICAL_SPACING,
+        };
+
+        // 创建新节点
+        const newNodeId = addNode(
+          CANVAS_NODE_TYPES.upload,
+          newPosition,
+          {
+            sourceFileName: file.name,
+          }
+        );
+
+        if (newNodeId) {
+          newNodesIds.push(newNodeId);
+
+          // 异步处理文件
+          setTimeout(async () => {
+            try {
+              const prepared = await prepareNodeImageFromFile(file);
+              const nextData = {
+                imageUrl: prepared.imageUrl,
+                previewImageUrl: prepared.previewImageUrl,
+                aspectRatio: prepared.aspectRatio || '1:1',
+                sourceFileName: file.name,
+                displayName: useSettingsStore.getState().useUploadFilenameAsNodeTitle ? file.name : undefined,
+              };
+              updateNodeData(newNodeId, nextData);
+            } catch (error) {
+              console.error(`[canvas-drop] Failed to process file ${i + 1}:`, error);
+            }
+          }, i * 50); // 每个文件延迟50ms
+        }
+      }
+
+      // 选中第一个创建的节点
+      if (newNodesIds.length > 0) {
+        setSelectedNode(newNodesIds[0]);
+      }
+
+      console.log(`[canvas-drop] Created ${files.length} upload nodes at canvas position`);
+    },
+    [reactFlowInstance, addNode, updateNodeData, setSelectedNode]
+  );
+
+  // 长按检测和批量操作
+  const handlePaneMouseDown = useCallback((event: ReactMouseEvent) => {
+    // 只响应左键（右键被浏览器菜单占用）
+    if (event.button !== 0) {
+      return;
+    }
+
+    // 隐藏批量操作按钮（用户重新操作）
+    if (showBatchButton) {
+      setShowBatchButton(false);
+    }
+
+    // 检查是否点击在节点上（节点有���己的拖拽逻辑）
+    const target = event.target as HTMLElement;
+    if (target.closest('.react-flow__node')) {
+      console.log('[mouse-down] Clicked on node, skipping long press');
+      return;
+    }
+
+    console.log('[mouse-down] Starting long press timer on pane...');
+
+    // 清除之前的定时器
+    if (longPressTimerRef.current) {
+      clearTimeout(longPressTimerRef.current);
+    }
+
+    isLongPressRef.current = false;
+
+    // 500ms后触发长按
+    longPressTimerRef.current = setTimeout(() => {
+      isLongPressRef.current = true;
+
+      // 计算选中的节点数量
+      const selectedNodes = nodes.filter(n => n.selected);
+      console.log(`[long-press] Triggered! Selected nodes: ${selectedNodes.length}/${nodes.length}`);
+
+      if (selectedNodes.length > 1) {
+        // 显示批量操作菜单
+        console.log(`[long-press] Showing batch menu at (${event.clientX}, ${event.clientY})`);
+        setBatchMenuPosition({
+          x: event.clientX,
+          y: event.clientY,
+        });
+        setShowBatchMenu(true);
+      } else {
+        console.log(`[long-press] Not enough nodes selected (need >1), have: ${selectedNodes.length}`);
+      }
+    }, 500);
+  }, [nodes, showBatchButton]);
+
+  const handlePaneMouseUp = useCallback((event: ReactMouseEvent) => {
+    // 清除长按定时器
+    const wasLongPress = isLongPressRef.current;
+    if (longPressTimerRef.current) {
+      console.log('[mouse-up] Long press detected, showing batch button');
+      clearTimeout(longPressTimerRef.current);
+      longPressTimerRef.current = null;
+    }
+
+    // 如果是长按结束，且选中了多个节点，显示批量操作按钮
+    if (wasLongPress) {
+      const selectedNodes = nodes.filter(n => n.selected);
+      console.log(`[mouse-up] Long press ended with ${selectedNodes.length} selected nodes`);
+
+      if (selectedNodes.length > 1) {
+        // 在鼠标位置显示批量操作按钮
+        setBatchButtonPosition({
+          x: event.clientX,
+          y: event.clientY,
+        });
+        setShowBatchButton(true);
+
+        // 5秒后自动隐藏按钮
+        setTimeout(() => {
+          setShowBatchButton(false);
+        }, 5000);
+      }
+    }
+
+    isLongPressRef.current = false;
+  }, [nodes]);
+
+  const handleContextMenu = useCallback((event: ReactMouseEvent) => {
+    // 阻止默认右键菜单，避免干扰画布操作
+    event.preventDefault();
+    event.stopPropagation();
+  }, []);
+
+  const handleBatchButtonClick = useCallback(() => {
+    // 在按钮位置显示批量菜单
+    setBatchMenuPosition(batchButtonPosition);
+    setShowBatchMenu(true);
+    setShowBatchButton(false); // 隐藏按钮
+  }, [batchButtonPosition]);
+
+  const handleBatchImageGen = useCallback(() => {
+    const selectedNodes = nodes.filter(n => n.selected);
+    if (selectedNodes.length === 0) {
+      setShowBatchMenu(false);
+      return;
+    }
+
+    // 在画布中心创建图片编辑节点
+    const canvasWidth = wrapperRef.current?.offsetWidth ?? 1200;
+    const canvasHeight = wrapperRef.current?.offsetHeight ?? 800;
+    const centerPos = reactFlowInstance.screenToFlowPosition({
+      x: canvasWidth / 2,
+      y: canvasHeight / 2,
+    });
+
+    const imageGenNodeId = addNode(CANVAS_NODE_TYPES.imageEdit, centerPos);
+
+    // 连接所有选中的节点到图片生成节点
+    selectedNodes.forEach((node) => {
+      if (nodeHasSourceHandle(node.type)) {
+        connectNodes({
+          source: node.id,
+          target: imageGenNodeId,
+          sourceHandle: 'source',
+          targetHandle: 'target',
+        });
+      }
+    });
+
+    setShowBatchMenu(false);
+    console.log(`[batch] Connected ${selectedNodes.length} nodes to image gen node`);
+  }, [nodes, reactFlowInstance, addNode, connectNodes]);
+
+  const handleBatchStoryboardGen = useCallback(() => {
+    const selectedNodes = nodes.filter(n => n.selected);
+    if (selectedNodes.length === 0) {
+      setShowBatchMenu(false);
+      return;
+    }
+
+    // 在画布中心创建分镜生成节点
+    const canvasWidth = wrapperRef.current?.offsetWidth ?? 1200;
+    const canvasHeight = wrapperRef.current?.offsetHeight ?? 800;
+    const centerPos = reactFlowInstance.screenToFlowPosition({
+      x: canvasWidth / 2,
+      y: canvasHeight / 2,
+    });
+
+    const storyboardGenNodeId = addNode(CANVAS_NODE_TYPES.storyboardGen, centerPos);
+
+    // 连接所有选中的节点到分镜生成节点
+    selectedNodes.forEach((node) => {
+      if (nodeHasSourceHandle(node.type)) {
+        connectNodes({
+          source: node.id,
+          target: storyboardGenNodeId,
+          sourceHandle: 'source',
+          targetHandle: 'target',
+        });
+      }
+    });
+
+    setShowBatchMenu(false);
+    console.log(`[batch] Connected ${selectedNodes.length} nodes to storyboard gen node`);
+  }, [nodes, reactFlowInstance, addNode, connectNodes]);
+
+  const handleOrganizeLayout = useCallback(() => {
+    const selectedNodes = nodes.filter(n => n.selected);
+    if (selectedNodes.length === 0) {
+      setShowBatchMenu(false);
+      return;
+    }
+
+    // 优化后的网格布局参数
+    const GRID_COLS = 3; // 每行3个节点
+    const GAP_X = 30; // 节点之间的水平间距
+    const GAP_Y = 30; // 节点之间的垂直间距
+    const START_X = 100; // 起始X位置
+    const START_Y = 100; // 起始Y位置
+    const DEFAULT_NODE_WIDTH = 320; // 默认节点宽度
+    const DEFAULT_NODE_HEIGHT = 250; // 默认节点高度
+
+    // 更新每个节点的位置为紧凑网格布局
+    const updates = selectedNodes.map((node, index) => {
+      const col = index % GRID_COLS;
+      const row = Math.floor(index / GRID_COLS);
+
+      // 计算新位置：考虑前面所有节点的宽度和间距
+      let newX = START_X;
+      let newY = START_Y;
+
+      // 计算水平位置（累加前面节点的宽度和间距）
+      for (let c = 0; c < col; c++) {
+        const prevNode = selectedNodes[row * GRID_COLS + c];
+        let prevWidth = prevNode?.measured?.width ?? DEFAULT_NODE_WIDTH;
+        // 处理可能的字符串类型
+        if (typeof prevWidth === 'string') {
+          prevWidth = DEFAULT_NODE_WIDTH;
+        }
+        newX += Number(prevWidth) + GAP_X;
+      }
+
+      // 计算垂直位置（累加前面行的最大高度和间距）
+      for (let r = 0; r < row; r++) {
+        let maxRowHeight = DEFAULT_NODE_HEIGHT;
+        // 找到这一行中最高的节点
+        for (let c = 0; c < GRID_COLS; c++) {
+          const rowIndex = r * GRID_COLS + c;
+          if (rowIndex < selectedNodes.length) {
+            const rowNode = selectedNodes[rowIndex];
+            let rowHeight = rowNode?.measured?.height ?? DEFAULT_NODE_HEIGHT;
+            // 处理可能的字符串类型
+            if (typeof rowHeight === 'string') {
+              rowHeight = DEFAULT_NODE_HEIGHT;
+            }
+            maxRowHeight = Math.max(maxRowHeight, Number(rowHeight));
+          }
+        }
+        newY += maxRowHeight + GAP_Y;
+      }
+
+      return {
+        id: node.id,
+        position: {
+          x: Math.round(newX),
+          y: Math.round(newY),
+        },
+      };
+    });
+
+    // 批量更新节点位置
+    applyNodesChange(
+      updates.map((update) => ({
+        type: 'position' as const,
+        id: update.id,
+        position: update.position,
+      }))
+    );
+
+    setShowBatchMenu(false);
+    scheduleCanvasPersist(0);
+    console.log(`[organize] Organized ${selectedNodes.length} nodes into compact grid layout`);
+  }, [nodes, applyNodesChange, scheduleCanvasPersist]);
+
   const handleNodeSelect = useCallback(
     (type: CanvasNodeType) => {
       const newNodeId = addNode(type, flowPosition);
@@ -1583,7 +1930,15 @@ export function Canvas() {
   );
 
   return (
-    <div ref={wrapperRef} className="relative h-full w-full">
+    <div
+      ref={wrapperRef}
+      className="relative h-full w-full"
+      onDragOver={handleCanvasDragOver}
+      onDrop={handleCanvasDrop}
+      onMouseDown={handlePaneMouseDown}
+      onMouseUp={handlePaneMouseUp}
+      onContextMenu={handleContextMenu}
+    >
       <ReactFlow
         nodes={nodes}
         edges={edges}
@@ -1671,6 +2026,25 @@ export function Canvas() {
             setPendingConnectStart(null);
             setPreviewConnectionVisual(null);
           }}
+        />
+      )}
+
+      {showBatchButton && (
+        <BatchOperationButton
+          position={batchButtonPosition}
+          selectedCount={nodes.filter(n => n.selected).length}
+          onClick={handleBatchButtonClick}
+        />
+      )}
+
+      {showBatchMenu && (
+        <BatchOperationMenu
+          position={batchMenuPosition}
+          selectedCount={nodes.filter(n => n.selected).length}
+          onBatchImageGen={handleBatchImageGen}
+          onBatchStoryboardGen={handleBatchStoryboardGen}
+          onOrganizeLayout={handleOrganizeLayout}
+          onClose={() => setShowBatchMenu(false)}
         />
       )}
 

@@ -5,6 +5,7 @@ import { useTranslation } from 'react-i18next';
 import { Moon, Sun, Languages } from 'lucide-react';
 import { useThemeStore } from '@/stores/themeStore';
 import { useProjectStore } from '@/stores/projectStore';
+import { isTauriEnvironment } from '@/utils/tauriMock';
 import closeNormalIcon from '@/assets/macos-traffic-lights/1-close-1-normal.svg';
 import closeHoverIcon from '@/assets/macos-traffic-lights/2-close-2-hover.svg';
 import minimizeNormalIcon from '@/assets/macos-traffic-lights/2-minimize-1-normal.svg';
@@ -23,7 +24,14 @@ export function TitleBar({ onSettingsClick, showBackButton, onBackClick }: Title
   const { theme, toggleTheme } = useThemeStore();
   const currentProjectName = useProjectStore((state) => state.currentProject?.name);
 
-  const appWindow = getCurrentWindow();
+  // 延迟获取 appWindow，避免在非 Tauri 环境下报错
+  const getAppWindow = useCallback(() => {
+    if (!isTauriEnvironment()) {
+      return null;
+    }
+    return getCurrentWindow();
+  }, []);
+
   const isZh = i18n.language.startsWith('zh');
   const isMac =
     typeof navigator !== 'undefined'
@@ -32,21 +40,25 @@ export function TitleBar({ onSettingsClick, showBackButton, onBackClick }: Title
   const titleText = currentProjectName ? `${currentProjectName} - ${appTitle}` : appTitle;
 
   const handleMinimize = useCallback(async () => {
-    await appWindow.minimize();
-  }, [appWindow]);
+    const appWindow = getAppWindow();
+    if (appWindow) await appWindow.minimize();
+  }, [getAppWindow]);
 
   const handleMaximize = useCallback(async () => {
+    const appWindow = getAppWindow();
+    if (!appWindow) return;
     const isMaximized = await appWindow.isMaximized();
     if (isMaximized) {
       await appWindow.unmaximize();
     } else {
       await appWindow.maximize();
     }
-  }, [appWindow]);
+  }, [getAppWindow]);
 
   const handleClose = useCallback(async () => {
-    await appWindow.close();
-  }, [appWindow]);
+    const appWindow = getAppWindow();
+    if (appWindow) await appWindow.close();
+  }, [getAppWindow]);
 
   const handleDragStart = useCallback(async (e: React.MouseEvent) => {
     if (e.button !== 0) return;
@@ -54,8 +66,9 @@ export function TitleBar({ onSettingsClick, showBackButton, onBackClick }: Title
     if (target?.closest('button') || target?.closest('[data-no-drag="true"]')) {
       return;
     }
-    await appWindow.startDragging();
-  }, [appWindow]);
+    const appWindow = getAppWindow();
+    if (appWindow) await appWindow.startDragging();
+  }, [getAppWindow]);
 
   const handleLanguageClick = useCallback(() => {
     const newLang = i18n.language.startsWith('zh') ? 'en' : 'zh';

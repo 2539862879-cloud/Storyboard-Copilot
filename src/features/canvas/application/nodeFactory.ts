@@ -20,11 +20,17 @@ export class CanvasNodeFactory implements NodeFactory {
       ...data,
     } as CanvasNodeData;
 
+    // 为分镜生成节点设置初始尺寸，避免创建后需要手动调整
+    const initialStyle = type === 'storyboardGenNode'
+      ? { width: 320, height: 700 }
+      : undefined;
+
     return {
       id: this.idGenerator.next(),
       type,
       position,
       data: nodeData,
+      ...(initialStyle ? { style: initialStyle } : {}),
     };
   }
 }

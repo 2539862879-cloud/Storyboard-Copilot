@@ -1,6 +1,5 @@
 import { useEffect, useState } from 'react';
 import { ReactFlowProvider } from '@xyflow/react';
-import { invoke } from '@tauri-apps/api/core';
 import { Canvas } from './features/canvas/Canvas';
 import { TitleBar } from './components/TitleBar';
 import { SettingsDialog } from './components/SettingsDialog';
@@ -23,6 +22,7 @@ import {
   subscribeOpenSettingsDialog,
   type SettingsCategory,
 } from './features/settings/settingsEvents';
+import { safeInvoke } from './utils/tauriMock';
 
 function toRgbCssValue(hexColor: string): string {
   const hex = hexColor.replace('#', '');
@@ -113,7 +113,7 @@ function App() {
       }
 
       try {
-        await invoke('frontend_ready');
+        await safeInvoke('frontend_ready');
       } catch (error) {
         if (cancelled) {
           return;

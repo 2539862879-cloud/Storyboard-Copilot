@@ -58,16 +58,34 @@ function resolveNodeDimension(value: number | undefined, fallback: number): numb
   return fallback;
 }
 
-function resolveDroppedImageFile(event: DragEvent<HTMLElement>): File | null {
-  const directFile = event.dataTransfer.files?.[0];
-  if (directFile) {
-    return directFile;
+function resolveDroppedImageFiles(event: DragEvent<HTMLElement>): File[] {
+  const files: File[] = [];
+
+  // 方式1: 从 dataTransfer.files 获取
+  if (event.dataTransfer.files) {
+    for (let i = 0; i < event.dataTransfer.files.length; i++) {
+      const file = event.dataTransfer.files[i];
+      // 支持图片和视频文件
+      if (file.type.startsWith('image/') || file.type.startsWith('video/')) {
+        files.push(file);
+      }
+    }
   }
 
-  const item = Array.from(event.dataTransfer.items || []).find(
-    (candidate) => candidate.kind === 'file' && candidate.type.startsWith('image/')
-  );
-  return item?.getAsFile() ?? null;
+  // 方式2: 从 dataTransfer.items 获取
+  if (files.length === 0 && event.dataTransfer.items) {
+    for (let i = 0; i < event.dataTransfer.items.length; i++) {
+      const item = event.dataTransfer.items[i];
+      if (item.kind === 'file') {
+        const file = item.getAsFile();
+        if (file && (file.type.startsWith('image/') || file.type.startsWith('video/'))) {
+          files.push(file);
+        }
+      }
+    }
+  }
+
+  return files;
 }
 
 export const UploadNode = memo(({ id, data, selected, width, height }: UploadNodeProps) => {
@@ -230,14 +248,84 @@ export const UploadNode = memo(({ id, data, selected, width, height }: UploadNod
     async (event: DragEvent<HTMLElement>) => {
       event.preventDefault();
       event.stopPropagation();
-      const file = resolveDroppedImageFile(event);
-      if (!file || !file.type.startsWith('image/')) {
+
+      const files = resolveDroppedImageFiles(event);
+
+      if (files.length === 0) {
         return;
       }
 
-      await processFile(file);
+      // 单个文件：当前节点处理
+      if (files.length === 1) {
+        const file = files[0];
+        if (!file.type.startsWith('image/') && !file.type.startsWith('video/')) {
+          return;
+        }
+        await processFile(file);
+        return;
+      }
+
+      // 多个文件：批量创建新节点
+      const HORIZONTAL_SPACING = 350; // 水平间距
+      const VERTICAL_SPACING = 350; // 垂直间距
+      const NODES_PER_ROW = 3; // 每行节点数
+      const START_OFFSET_X = 400; // 起始X偏移
+      const START_OFFSET_Y = 0; // 起始Y偏移
+
+      // 获取当前节点的位置作为参考点
+      const canvasStore = useCanvasStore.getState();
+      const currentNode = canvasStore.nodes.find(n => n.id === id);
+      const basePosition = currentNode?.position ?? { x: 100, y: 100 };
+      const currentUseUploadFilenameAsNodeTitle = useUploadFilenameAsNodeTitle; // 直接使用当前的值
+
+      for (let i = 0; i < files.length; i++) {
+        const file = files[i];
+        if (!file.type.startsWith('image/') && !file.type.startsWith('video/')) {
+          continue;
+        }
+
+        // 计算新节点位置（网格布局）
+        const row = Math.floor(i / NODES_PER_ROW);
+        const col = i % NODES_PER_ROW;
+        const newPosition = {
+          x: basePosition.x + START_OFFSET_X + col * HORIZONTAL_SPACING,
+          y: basePosition.y + START_OFFSET_Y + row * VERTICAL_SPACING,
+        };
+
+        // 创建新节点
+        const newNodeId = canvasStore.addNode(
+          CANVAS_NODE_TYPES.upload,
+          newPosition,
+          {
+            sourceFileName: file.name,
+          }
+        );
+
+        // 异步处理文件（延迟避免冲突）
+        if (newNodeId) {
+          setTimeout(async () => {
+            try {
+              const prepared = await prepareNodeImageFromFile(file);
+              const nextData: Partial<UploadImageNodeData> = {
+                imageUrl: prepared.imageUrl,
+                previewImageUrl: prepared.previewImageUrl,
+                aspectRatio: prepared.aspectRatio || '1:1',
+                sourceFileName: file.name,
+              };
+              if (currentUseUploadFilenameAsNodeTitle) {
+                nextData.displayName = file.name;
+              }
+              canvasStore.updateNodeData(newNodeId, nextData);
+            } catch (error) {
+              console.error(`[multi-drop] Failed to process file ${i + 1}:`, error);
+            }
+          }, i * 50); // 每个文件延迟50ms
+        }
+      }
+
+      console.log(`[multi-drop] Created ${files.length} upload nodes with spacing ${HORIZONTAL_SPACING}x${VERTICAL_SPACING}`);
     },
-    [processFile]
+    [processFile, id]
   );
 
   const handleDragOver = useCallback((event: DragEvent<HTMLElement>) => {
@@ -358,8 +446,10 @@ export const UploadNode = memo(({ id, data, selected, width, height }: UploadNod
         type="source"
         id="source"
         position={Position.Right}
-        className="!h-2 !w-2 !border-surface-dark !bg-accent"
-      />
+        className="!h-8 !w-8 !border-2 !border-surface-dark !bg-accent/50 !shadow-lg !shadow-accent/30 hover:!scale-110 hover:!bg-accent/70 hover:!shadow-accent/50 transition-all duration-200"
+      >
+        <div className="flex h-full w-full items-center justify-center text-white/80 text-lg font-bold pointer-events-none">+</div>
+      </Handle>
       <NodeResizeHandle
         minWidth={resizeMinWidth}
         minHeight={resizeMinHeight}

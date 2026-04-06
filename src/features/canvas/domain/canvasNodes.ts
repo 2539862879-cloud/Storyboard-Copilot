@@ -8,6 +8,7 @@ export const CANVAS_NODE_TYPES = {
   group: 'groupNode',
   storyboardSplit: 'storyboardNode',
   storyboardGen: 'storyboardGenNode',
+  videoGen: 'videoGenNode',
 } as const;
 
 export type CanvasNodeType = (typeof CANVAS_NODE_TYPES)[keyof typeof CANVAS_NODE_TYPES];
@@ -80,6 +81,43 @@ export interface ImageEditNodeData extends NodeImageData {
   generationDurationMs?: number;
 }
 
+export const VIDEO_DURATIONS = ['3s', '5s', '15s'] as const;
+export const VIDEO_RESOLUTIONS = ['720p', '1080p'] as const;
+export const VIDEO_FRAME_RATES = ['24fps', '30fps'] as const;
+
+export type VideoDuration = (typeof VIDEO_DURATIONS)[number];
+export type VideoResolution = (typeof VIDEO_RESOLUTIONS)[number];
+export type VideoFrameRate = (typeof VIDEO_FRAME_RATES)[number];
+
+export interface NodeVideoData extends NodeDisplayData {
+  videoUrl: string | null;
+  previewImageUrl?: string | null; // 视频第一帧作为预览
+  aspectRatio: string;
+  duration: VideoDuration;
+  resolution: VideoResolution;
+  frameRate: VideoFrameRate;
+  isSizeManuallyAdjusted?: boolean;
+}
+
+export interface VideoGenNodeData extends NodeVideoData {
+  prompt: string;
+  model: string;
+  duration: VideoDuration;
+  resolution: VideoResolution;
+  frameRate: VideoFrameRate;
+  requestAspectRatio?: string;
+  extraParams?: Record<string, unknown>;
+  storyboardPrompt?: string; // 分镜提示词
+  storyboardFrames?: Array<{
+    id: string;
+    imageUrl: string | null;
+    description: string;
+  }>; // 分镜帧
+  isGenerating?: boolean;
+  generationStartedAt?: number | null;
+  generationDurationMs?: number;
+}
+
 export interface StoryboardFrameItem {
   id: string;
   imageUrl: string | null;
@@ -126,6 +164,7 @@ export interface StoryboardGenNodeData {
   gridRows: number;
   gridCols: number;
   frames: StoryboardGenFrameItem[];
+  globalPrompt?: string; // 🆕 全局核心提示词
   ratioControlMode?: StoryboardRatioControlMode;
   model: string;
   size: ImageSize;
@@ -147,7 +186,8 @@ export type CanvasNodeData =
   | GroupNodeData
   | ImageEditNodeData
   | StoryboardSplitNodeData
-  | StoryboardGenNodeData;
+  | StoryboardGenNodeData
+  | VideoGenNodeData;
 
 export type CanvasNode = Node<CanvasNodeData, CanvasNodeType>;
 export type CanvasEdge = Edge;

@@ -221,14 +221,18 @@ export const ImageNode = memo(({ id, data, selected, type, width, height }: Imag
         type="target"
         id="target"
         position={Position.Left}
-        className="!h-2 !w-2 !border-surface-dark !bg-accent"
-      />
+        className="!h-8 !w-8 !border-2 !border-surface-dark !bg-accent/50 !shadow-lg !shadow-accent/30 hover:!scale-110 hover:!bg-accent/70 hover:!shadow-accent/50 transition-all duration-200"
+      >
+        <div className="flex h-full w-full items-center justify-center text-white/80 text-lg font-bold pointer-events-none">+</div>
+      </Handle>
       <Handle
         type="source"
         id="source"
         position={Position.Right}
-        className="!h-2 !w-2 !border-surface-dark !bg-accent"
-      />
+        className="!h-8 !w-8 !border-2 !border-surface-dark !bg-accent/50 !shadow-lg !shadow-accent/30 hover:!scale-110 hover:!bg-accent/70 hover:!shadow-accent/50 transition-all duration-200"
+      >
+        <div className="flex h-full w-full items-center justify-center text-white/80 text-lg font-bold pointer-events-none">+</div>
+      </Handle>
       <NodeResizeHandle
         minWidth={resizeMinWidth}
         minHeight={resizeMinHeight}

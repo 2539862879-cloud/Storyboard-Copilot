@@ -48,6 +48,11 @@ import {
   sanitizeStoryboardText,
 } from '@/features/canvas/application/storyboardText';
 import {
+  applyParsedStoryboard,
+  optimalGridSize,
+  parseStoryboardPrompt,
+} from '@/utils/storyboardParser';
+import {
   findReferenceTokens,
   insertReferenceToken,
   removeTextRange,
@@ -111,7 +116,7 @@ const STORYBOARD_GRID_MAX_WIDTH_PX = 320;
 const STORYBOARD_CONTROL_ROW_WIDTH_PX = 274;
 const STORYBOARD_PARAMS_ROW_WIDTH_PX = 286;
 const STORYBOARD_GEN_NODE_MIN_WIDTH_PX = 200;
-const STORYBOARD_GEN_NODE_MIN_HEIGHT_PX = 320;
+const STORYBOARD_GEN_NODE_MIN_HEIGHT_PX = 700;
 const STORYBOARD_GEN_HEADER_ADJUST = { x: 0, y: 0, scale: 1 };
 const STORYBOARD_GEN_ICON_ADJUST = { x: 0, y: 0, scale: 0.95 };
 const STORYBOARD_GEN_TITLE_ADJUST = { x: 0, y: 0, scale: 1 };
@@ -810,12 +815,19 @@ export const StoryboardGenNode = memo(({ id, data, selected, width, height }: St
     const rows = Math.max(1, nodeData.gridRows);
     const aspectRatio = Math.max(0.1, parseAspectRatio(frameAspectRatioValue));
     const innerWidth = Math.max(120, resolvedNodeWidth - STORYBOARD_NODE_HORIZONTAL_PADDING_PX);
+
+    // 计算全局提示词区域的高度（如果存在）
+    const globalPromptSectionHeight = nodeData.globalPrompt
+      ? 154  // 全局提示词区域高度：mb-3(12px) + p-2.5(20px) + textarea~60px + mt-1.5(6px) + 其他间距约56px
+      : 0;
+
     const availableGridHeight = Math.max(
       72,
       resolvedNodeHeight
       - NODE_VERTICAL_PADDING_PX
       - CONTROL_ROW_HEIGHT_PX
       - CONTROL_ROW_MARGIN_BOTTOM_PX
+      - globalPromptSectionHeight  // 减去全局提示词区域高度
       - FRAME_GRID_MARGIN_BOTTOM_PX
       - PARAM_ROW_HEIGHT_PX
     );
@@ -838,7 +850,7 @@ export const StoryboardGenNode = memo(({ id, data, selected, width, height }: St
       paramsRowWidth,
       cellAspectRatio: toCssAspectRatio(frameAspectRatioValue),
     };
-  }, [frameAspectRatioValue, nodeData.gridCols, nodeData.gridRows, resolvedNodeHeight, resolvedNodeWidth]);
+  }, [frameAspectRatioValue, nodeData.gridCols, nodeData.gridRows, nodeData.globalPrompt, resolvedNodeHeight, resolvedNodeWidth]);
 
   useEffect(() => {
     frameDescriptionDraftsRef.current = frameDescriptionDrafts;
@@ -1461,14 +1473,6 @@ export const StoryboardGenNode = memo(({ id, data, selected, width, height }: St
           />
         </div>
 
-        {showStoryboardGenAdvancedRatioControls && (
-          <div className="min-w-0 flex-1 rounded-full border border-[rgba(255,255,255,0.12)] bg-[rgba(255,255,255,0.04)] px-2 py-0.5 text-center text-[10px] text-text-muted">
-            <span>{t('node.storyboardGen.cellAspectRatio')}: {resolvedAspectRatios.cellAspectRatioLabel}</span>
-            <span className="mx-1 text-[rgba(255,255,255,0.22)]">|</span>
-            <span>{t('node.storyboardGen.overallAspectRatio')}: {resolvedAspectRatios.overallAspectRatioLabel}</span>
-          </div>
-        )}
-
         <div className="flex items-center gap-1">
           {showStoryboardGenAdvancedRatioControls && (
             <div className="flex h-5 items-center rounded-full border border-[rgba(255,255,255,0.14)] bg-[rgba(255,255,255,0.04)] p-0.5">
@@ -1503,6 +1507,109 @@ export const StoryboardGenNode = memo(({ id, data, selected, width, height }: St
           <div className={GRID_SUMMARY_CLASS}>
             {t('node.storyboardGen.frameCount', { count: totalFrames })}
           </div>
+        </div>
+      </div>
+
+      {/* 全局核心提示词区域 */}
+      <div className="mb-3 shrink-0 rounded-lg border border-white/10 bg-white/5 p-2.5">
+        <div className="mb-2 flex items-center justify-between">
+          <div className="flex items-center gap-1.5">
+            <span className="text-[10px] font-medium text-text-dark">
+              📝 {t('node.storyboardGen.globalPrompt', { defaultValue: '核心提示词' })}
+            </span>
+            <span className="text-[8px] text-text-muted/60">
+              ({t('node.storyboardGen.globalPromptHint', { defaultValue: '应用到所有分镜' })})
+            </span>
+          </div>
+          <div className="flex items-center gap-1">
+            <button
+              type="button"
+              onClick={(event) => {
+                event.stopPropagation();
+                const globalPrompt = nodeData.globalPrompt ?? '';
+                if (!globalPrompt.trim()) {
+                  return;
+                }
+                try {
+                  const parsed = parseStoryboardPrompt(globalPrompt);
+                  const applied = applyParsedStoryboard(parsed, Math.max(parsed.frames.length, nodeData.gridRows * nodeData.gridCols));
+                  const frameCount = applied.frames.length;
+                  let newRows = nodeData.gridRows;
+                  let newCols = nodeData.gridCols;
+                  if (frameCount > 0) {
+                    const bestSize = optimalGridSize(frameCount);
+                    newRows = bestSize.rows;
+                    newCols = bestSize.cols;
+                  }
+                  updateNodeData(id, {
+                    globalPrompt: applied.globalPrompt,
+                    frames: applied.frames,
+                    gridRows: newRows,
+                    gridCols: newCols,
+                  });
+                } catch (error) {
+                  console.error('[智能解析] 解析失败:', error);
+                }
+              }}
+              disabled={!nodeData.globalPrompt}
+              className={`px-2 py-0.5 text-[9px] font-medium rounded transition-colors ${
+                nodeData.globalPrompt
+                  ? 'bg-green-500 text-white hover:bg-green-600'
+                  : 'bg-white/10 text-text-muted/40 cursor-not-allowed'
+              }`}
+              title="自动识别镜号和时间，分离核心提示词和分镜提示词"
+            >
+              🧠 {t('node.storyboardGen.smartParse', { defaultValue: '智能解析' })}
+            </button>
+            <button
+              type="button"
+              onClick={(event) => {
+                event.stopPropagation();
+                if (!nodeData.globalPrompt) {
+                  return;
+                }
+                const updatedFrames = nodeData.frames.map(frame => {
+                  const frameDescription = frameDescriptionDrafts[frame.id] ?? frame.description;
+                  const descWithGlobal = nodeData.globalPrompt!.trim()
+                    ? `${nodeData.globalPrompt!.trim()}\n${frameDescription}`.trim()
+                    : frameDescription;
+                  return {
+                    ...frame,
+                    description: descWithGlobal,
+                  };
+                });
+                updateNodeData(id, { frames: updatedFrames });
+                updateNodeData(id, { globalPrompt: '' });
+              }}
+              disabled={!nodeData.globalPrompt}
+              className={`px-2 py-0.5 text-[9px] font-medium rounded transition-colors ${
+                nodeData.globalPrompt
+                  ? 'bg-accent text-white hover:bg-accent/80'
+                  : 'bg-white/10 text-text-muted/40 cursor-not-allowed'
+              }`}
+            >
+              {t('node.storyboardGen.applyToAll', { defaultValue: '应用到所有分镜' })}
+            </button>
+          </div>
+        </div>
+        <textarea
+          value={nodeData.globalPrompt ?? ''}
+          onChange={(event) => {
+            event.stopPropagation();
+            updateNodeData(id, { globalPrompt: event.target.value });
+          }}
+          onFocus={(event) => event.stopPropagation()}
+          placeholder={t('node.storyboardGen.globalPromptPlaceholder', {
+            defaultValue: '输入所有分镜的共同要点，例如：风格、色调、角色特征、场景设定等...\n\n或者输入完整的分镜脚本，例如：\n动漫风格，明亮色调\n镜头1 00:05 女孩走在樱花树下\n镜头2 00:10 女孩转身微笑'
+          })}
+          rows={3}
+          className="ui-scrollbar w-full resize-none rounded border border-white/10 bg-bg-dark/40 px-2 py-1.5 text-[10px] leading-relaxed text-text-dark placeholder:text-text-muted/40 focus:border-accent/50 focus:bg-bg-dark/60 focus:outline-none transition-colors"
+          style={{ scrollbarGutter: 'stable' }}
+        />
+        <div className="mt-1.5 text-[8px] text-text-muted/50">
+          💡 {t('node.storyboardGen.smartParseHint', {
+            defaultValue: '提示: 输入完整分镜脚本后点击"智能解析"，可自动分离核心提示词和分镜描述'
+          })}
         </div>
       </div>
 
@@ -1678,14 +1785,18 @@ export const StoryboardGenNode = memo(({ id, data, selected, width, height }: St
         type="target"
         id="target"
         position={Position.Left}
-        className="!h-2 !w-2 !border-surface-dark !bg-accent"
-      />
+        className="!h-8 !w-8 !border-2 !border-surface-dark !bg-accent/50 !shadow-lg !shadow-accent/30 hover:!scale-110 hover:!bg-accent/70 hover:!shadow-accent/50 transition-all duration-200"
+      >
+        <div className="flex h-full w-full items-center justify-center text-white/80 text-lg font-bold pointer-events-none">+</div>
+      </Handle>
       <Handle
         type="source"
         id="source"
         position={Position.Right}
-        className="!h-2 !w-2 !border-surface-dark !bg-accent"
-      />
+        className="!h-8 !w-8 !border-2 !border-surface-dark !bg-accent/50 !shadow-lg !shadow-accent/30 hover:!scale-110 hover:!bg-accent/70 hover:!shadow-accent/50 transition-all duration-200"
+      >
+        <div className="flex h-full w-full items-center justify-center text-white/80 text-lg font-bold pointer-events-none">+</div>
+      </Handle>
       <NodeResizeHandle
         minWidth={baseFrameLayout.nodeWidth}
         minHeight={baseFrameLayout.nodeHeight}

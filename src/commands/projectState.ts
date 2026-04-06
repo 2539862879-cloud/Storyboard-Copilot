@@ -1,4 +1,5 @@
 import { invoke } from '@tauri-apps/api/core';
+import { isTauriEnvironment } from '@/utils/tauriMock';
 
 export interface ProjectSummaryRecord {
   id: string;
@@ -21,14 +22,26 @@ export interface ProjectRecord {
 }
 
 export async function listProjectSummaries(): Promise<ProjectSummaryRecord[]> {
+  if (!isTauriEnvironment()) {
+    // 纯前端模式 - 返回空列表
+    return [];
+  }
   return await invoke<ProjectSummaryRecord[]>('list_project_summaries');
 }
 
 export async function getProjectRecord(projectId: string): Promise<ProjectRecord | null> {
+  if (!isTauriEnvironment()) {
+    return null;
+  }
   return await invoke<ProjectRecord | null>('get_project_record', { projectId });
 }
 
 export async function upsertProjectRecord(record: ProjectRecord): Promise<void> {
+  if (!isTauriEnvironment()) {
+    // 纯前端模式 - 只记录日志
+    console.log('[Mock] upsertProjectRecord:', record.id);
+    return;
+  }
   await invoke('upsert_project_record', { record });
 }
 
@@ -36,6 +49,10 @@ export async function updateProjectViewportRecord(
   projectId: string,
   viewportJson: string
 ): Promise<void> {
+  if (!isTauriEnvironment()) {
+    console.log('[Mock] updateProjectViewportRecord:', projectId);
+    return;
+  }
   await invoke('update_project_viewport_record', { projectId, viewportJson });
 }
 
@@ -44,9 +61,17 @@ export async function renameProjectRecord(
   name: string,
   updatedAt: number
 ): Promise<void> {
+  if (!isTauriEnvironment()) {
+    console.log('[Mock] renameProjectRecord:', projectId, name);
+    return;
+  }
   await invoke('rename_project_record', { projectId, name, updatedAt });
 }
 
 export async function deleteProjectRecord(projectId: string): Promise<void> {
+  if (!isTauriEnvironment()) {
+    console.log('[Mock] deleteProjectRecord:', projectId);
+    return;
+  }
   await invoke('delete_project_record', { projectId });
 }
