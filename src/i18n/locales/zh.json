@@ -90,7 +90,6 @@
       "aiImageGeneration": "AI 图片",
       "storyboard": "分镜节点",
       "storyboardGen": "分镜生成",
-      "videoGen": "AI 视频",
       "textAnnotation": "文本注释"
     },
     "imageNode": {
@@ -141,17 +140,6 @@
     "textAnnotation": {
       "placeholder": "输入 Markdown 文本，取消选中后会渲染预览",
       "empty": "空注释"
-    },
-    "video": {
-      "title": "视频生成",
-      "prompt": "提示词",
-      "promptPlaceholder": "描述你想要生成的视频内容...",
-      "duration": "时长",
-      "resolution": "分辨率",
-      "frameRate": "帧率",
-      "noPreview": "暂无预览",
-      "generating": "生成中...",
-      "generate": "生成视频"
     }
   },
   "viewer": {

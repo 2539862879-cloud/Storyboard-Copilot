@@ -90,7 +90,6 @@
       "aiImageGeneration": "AI Image",
       "storyboard": "Storyboard Node",
       "storyboardGen": "Storyboard Generation",
-      "videoGen": "AI Video",
       "textAnnotation": "Text Annotation"
     },
     "imageNode": {
@@ -141,17 +140,6 @@
     "textAnnotation": {
       "placeholder": "Write Markdown text. It will render when unselected.",
       "empty": "Empty note"
-    },
-    "video": {
-      "title": "Video Generation",
-      "prompt": "Prompt",
-      "promptPlaceholder": "Describe the video you want to generate...",
-      "duration": "Duration",
-      "resolution": "Resolution",
-      "frameRate": "Frame Rate",
-      "noPreview": "No preview available",
-      "generating": "Generating...",
-      "generate": "Generate Video"
     }
   },
   "viewer": {

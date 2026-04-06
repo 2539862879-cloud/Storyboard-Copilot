@@ -3,7 +3,6 @@ import type {
   ImageModelRuntimeContext,
   ModelProviderDefinition,
   ResolutionOption,
-  VideoModelDefinition,
 } from './types';
 
 const providerModules = import.meta.glob<{ provider: ModelProviderDefinition }>(
@@ -12,10 +11,6 @@ const providerModules = import.meta.glob<{ provider: ModelProviderDefinition }>(
 );
 const modelModules = import.meta.glob<{ imageModel: ImageModelDefinition }>(
   './image/**/*.ts',
-  { eager: true }
-);
-const videoModelModules = import.meta.glob<{ videoModel: VideoModelDefinition }>(
-  './video/**/*.ts',
   { eager: true }
 );
 
@@ -29,23 +24,14 @@ const imageModels: ImageModelDefinition[] = Object.values(modelModules)
   .filter((model): model is ImageModelDefinition => Boolean(model))
   .sort((a, b) => a.id.localeCompare(b.id));
 
-const videoModels: VideoModelDefinition[] = Object.values(videoModelModules)
-  .map((module) => module.videoModel ?? (module as any).imageModel) // 兼容旧的导出方式
-  .filter((model): model is VideoModelDefinition => Boolean(model && model.mediaType === 'video'))
-  .sort((a, b) => a.id.localeCompare(b.id));
-
 const providerMap = new Map<string, ModelProviderDefinition>(
   providers.map((provider) => [provider.id, provider])
 );
 const imageModelMap = new Map<string, ImageModelDefinition>(
   imageModels.map((model) => [model.id, model])
 );
-const videoModelMap = new Map<string, VideoModelDefinition>(
-  videoModels.map((model) => [model.id, model])
-);
 
 export const DEFAULT_IMAGE_MODEL_ID = 'kie/nano-banana-2';
-export const DEFAULT_VIDEO_MODEL_ID = 'seedance/seedance-2.0';
 
 const imageModelAliasMap = new Map<string, string>([
   ['gemini-3.1-flash', 'ppio/gemini-3.1-flash'],
@@ -63,14 +49,6 @@ export function listModelProviders(): ModelProviderDefinition[] {
 export function getImageModel(modelId: string): ImageModelDefinition {
   const resolvedModelId = imageModelAliasMap.get(modelId) ?? modelId;
   return imageModelMap.get(resolvedModelId) ?? imageModelMap.get(DEFAULT_IMAGE_MODEL_ID)!;
-}
-
-export function listVideoModels(): VideoModelDefinition[] {
-  return videoModels;
-}
-
-export function getVideoModel(modelId: string): VideoModelDefinition {
-  return videoModelMap.get(modelId) ?? videoModelMap.get(DEFAULT_VIDEO_MODEL_ID)!;
 }
 
 export function resolveImageModelResolutions(

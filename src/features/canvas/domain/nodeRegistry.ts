@@ -12,15 +12,11 @@ import {
   type StoryboardGenNodeData,
   type TextAnnotationNodeData,
   type UploadImageNodeData,
-  type VideoGenNodeData,
-  type VideoDuration,
-  type VideoResolution,
-  type VideoFrameRate,
 } from './canvasNodes';
 import { DEFAULT_NODE_DISPLAY_NAME } from './nodeDisplay';
-import { DEFAULT_IMAGE_MODEL_ID, DEFAULT_VIDEO_MODEL_ID } from '../models';
+import { DEFAULT_IMAGE_MODEL_ID } from '../models';
 
-export type MenuIconKey = 'upload' | 'sparkles' | 'layout' | 'text' | 'video';
+export type MenuIconKey = 'upload' | 'sparkles' | 'layout' | 'text';
 
 export interface CanvasNodeCapabilities {
   toolbar: boolean;
@@ -255,43 +251,6 @@ const storyboardGenNodeDefinition: CanvasNodeDefinition<StoryboardGenNodeData> =
   }),
 };
 
-const videoGenNodeDefinition: CanvasNodeDefinition<VideoGenNodeData> = {
-  type: CANVAS_NODE_TYPES.videoGen,
-  menuLabelKey: 'node.menu.videoGen',
-  menuIcon: 'video',
-  visibleInMenu: true,
-  capabilities: {
-    toolbar: true,
-    promptInput: true,
-  },
-  connectivity: {
-    sourceHandle: true,
-    targetHandle: true,
-    connectMenu: {
-      fromSource: true,
-      fromTarget: false,
-    },
-  },
-  createDefaultData: () => ({
-    displayName: DEFAULT_NODE_DISPLAY_NAME[CANVAS_NODE_TYPES.videoGen],
-    prompt: '',
-    model: DEFAULT_VIDEO_MODEL_ID,
-    duration: '5s' as VideoDuration,
-    resolution: '1080p' as VideoResolution,
-    frameRate: '30fps' as VideoFrameRate,
-    requestAspectRatio: '16:9',
-    extraParams: {},
-    storyboardPrompt: '',
-    storyboardFrames: [],
-    videoUrl: null,
-    previewImageUrl: null,
-    aspectRatio: '16:9',
-    isGenerating: false,
-    generationStartedAt: null,
-    generationDurationMs: 300000,
-  }),
-};
-
 export const canvasNodeDefinitions: Record<CanvasNodeType, CanvasNodeDefinition> = {
   [CANVAS_NODE_TYPES.upload]: uploadNodeDefinition,
   [CANVAS_NODE_TYPES.imageEdit]: imageEditNodeDefinition,
@@ -300,7 +259,6 @@ export const canvasNodeDefinitions: Record<CanvasNodeType, CanvasNodeDefinition>
   [CANVAS_NODE_TYPES.group]: groupNodeDefinition,
   [CANVAS_NODE_TYPES.storyboardSplit]: storyboardSplitDefinition,
   [CANVAS_NODE_TYPES.storyboardGen]: storyboardGenNodeDefinition,
-  [CANVAS_NODE_TYPES.videoGen]: videoGenNodeDefinition,
 };
 
 export function getNodeDefinition(type: CanvasNodeType): CanvasNodeDefinition {
